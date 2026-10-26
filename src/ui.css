@@ -1,0 +1,501 @@
+/* Arkham: Revived PS3 patcher - wizard styles.
+   Scoped to #arkham-patcher so the rest of kiwifruitdev.com is untouched. */
+
+#arkham-patcher,
+#arkham-patcher * {
+  box-sizing: border-box;
+}
+
+#arkham-patcher {
+  color: #e7ecf5;
+  font-family: 'Cambria', Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.55;
+  padding-bottom: 8px;
+}
+
+#arkham-patcher h2 {
+  font-family: 'Cambria', Georgia, serif;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 4px 0 10px;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
+#arkham-patcher h3 {
+  font-size: 17px;
+  margin: 18px 0 6px;
+  color: #f1f5fb;
+}
+
+#arkham-patcher p {
+  margin: 0 0 10px;
+}
+
+#arkham-patcher code {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.88em;
+  background: #101a2b;
+  border: 1px solid #2b3c55;
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: #d8e6ff;
+  overflow-wrap: anywhere;
+}
+
+#arkham-patcher a {
+  color: #9ec7ff;
+}
+
+.ak-wizard {
+  margin-top: 4px;
+}
+
+.ak-wizard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  min-height: 22px;
+}
+
+.ak-dots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ak-dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #5d7699;
+  background: #16233a;
+  cursor: pointer;
+}
+
+.ak-dot-done {
+  background: #3f6f52;
+  border-color: #67a37f;
+}
+
+.ak-dot-current {
+  background: #e9c46a;
+  border-color: #ffe6a3;
+  transform: scale(1.25);
+}
+
+.ak-step-label {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  color: #a9bbd6;
+  white-space: nowrap;
+}
+
+.ak-page {
+  background: #0a1220;
+  border: 1px solid #29405f;
+  border-radius: 10px;
+  padding: 16px 18px 12px;
+  box-shadow: inset 0 0 40px rgba(47, 88, 140, 0.16);
+}
+
+.ak-list {
+  margin: 8px 0 12px;
+  padding-left: 24px;
+}
+
+.ak-list li {
+  margin: 6px 0;
+}
+
+.ak-note {
+  color: #a9bbd6;
+  font-size: 14px;
+}
+
+.ak-error-text {
+  color: #ff9b9b;
+}
+
+.ak-callout,
+.ak-status {
+  border-left: 4px solid #e9c46a;
+  background: #131f33;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 12px 0;
+}
+
+.ak-callout p:last-child,
+.ak-status p:last-child {
+  margin-bottom: 0;
+}
+
+.ak-status-ok {
+  border-left-color: #63b37c;
+  background: #10261a;
+}
+
+.ak-status-error {
+  border-left-color: #d9534f;
+  background: #2a1214;
+}
+
+.ak-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  align-items: flex-start;
+}
+
+.ak-button {
+  font-family: 'Cambria', Georgia, serif;
+  font-size: 16px;
+  color: #fff;
+  background: linear-gradient(#3b6ea5, #2a5079);
+  border: 1px solid #6d9ccd;
+  border-radius: 6px;
+  padding: 9px 18px;
+  cursor: pointer;
+  text-shadow: 1px 1px 0 #000;
+  transition: filter 0.15s, transform 0.05s;
+}
+
+.ak-button:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+
+.ak-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ak-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ak-button-primary {
+  background: linear-gradient(#2f7d4d, #1f5a37);
+  border-color: #67b07f;
+}
+
+.ak-button-ghost {
+  background: #17253b;
+  border-color: #4d6788;
+}
+
+.ak-button-file {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+
+.ak-button-file input[type='file'] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+}
+
+.ak-wizard-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ak-wizard-nav .ak-button {
+  min-width: 110px;
+}
+
+.ak-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.ak-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 15px;
+  color: #dbe6f7;
+  background: #111d31;
+  border: 2px solid #34506f;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ak-choice:hover {
+  border-color: #e9c46a;
+  background: #17263d;
+}
+
+.ak-choice-selected {
+  border-color: #e9c46a;
+  background: #1b2b42;
+}
+
+.ak-choice strong {
+  font-size: 18px;
+  color: #fff;
+}
+
+.ak-choice-tag {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #e9c46a;
+}
+
+.ak-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.ak-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #a9bbd6;
+}
+
+.ak-select {
+  font-family: 'Cambria', Georgia, serif;
+  font-size: 16px;
+  color: #fff;
+  background: #17253b;
+  border: 1px solid #4d6788;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.ak-details {
+  margin: 14px 0;
+  border: 1px solid #29405f;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #0f1928;
+}
+
+.ak-details summary {
+  cursor: pointer;
+  color: #e9c46a;
+}
+
+.ak-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.ak-table th,
+.ak-table td {
+  border: 1px solid #29405f;
+  padding: 5px 8px;
+  text-align: left;
+}
+
+.ak-table th {
+  background: #16233a;
+  color: #c9d8ee;
+}
+
+.ak-busy {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  color: #9ec7ff;
+  margin: 8px 0;
+}
+
+/* Progress */
+.ak-progress {
+  margin: 14px 0 6px;
+}
+
+.ak-progress-status {
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.ak-bar {
+  height: 18px;
+  background: #0b1626;
+  border: 1px solid #34506f;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.ak-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2f7d4d, #63b37c, #e9c46a);
+  transition: width 0.25s linear;
+}
+
+.ak-bar-sub {
+  height: 8px;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.ak-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  color: #c9d8ee;
+  margin-bottom: 6px;
+}
+
+.ak-progress-detail {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  color: #a9bbd6;
+  overflow-wrap: anywhere;
+}
+
+.ak-progress-log {
+  max-height: 130px;
+  overflow: auto;
+  background: #07101c;
+  border: 1px solid #22344d;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  color: #a9bbd6;
+  white-space: pre-wrap;
+}
+
+.ak-progress-actions {
+  margin-top: 10px;
+}
+
+/* Mobile modal */
+.ak-modal-open {
+  overflow: hidden;
+}
+
+.ak-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 14, 0.82);
+  backdrop-filter: blur(3px);
+}
+
+.ak-modal {
+  max-width: 520px;
+  max-height: 85vh;
+  overflow: auto;
+  background: #0d1727;
+  border: 2px solid #e9c46a;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.7);
+}
+
+.ak-modal h2 {
+  margin-top: 0;
+}
+
+.ak-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+/* Toasts */
+.ak-toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 11000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 36px));
+}
+
+.ak-toast {
+  background: #152236;
+  border: 1px solid #4d6788;
+  border-left: 4px solid #e9c46a;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #e7ecf5;
+  font-family: 'Cambria', Georgia, serif;
+  font-size: 15px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.ak-toast-error {
+  border-left-color: #d9534f;
+}
+
+.ak-toast-ok {
+  border-left-color: #63b37c;
+}
+
+.ak-toast-out {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Mobile / narrow screens */
+@media (max-width: 620px) {
+  #arkham-patcher {
+    font-size: 15px;
+  }
+
+  .ak-page {
+    padding: 12px 12px 10px;
+  }
+
+  .ak-wizard-nav {
+    position: sticky;
+    bottom: 0;
+    background: #0C141E;
+    padding: 8px 0;
+    z-index: 5;
+  }
+
+  .ak-wizard-nav .ak-button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .ak-step-label {
+    display: none;
+  }
+
+  .ak-table {
+    display: block;
+    overflow-x: auto;
+  }
+}

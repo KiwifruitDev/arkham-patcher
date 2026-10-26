@@ -1,0 +1,22 @@
+Arkham: Revived - PS3 patcher
+Copyright (C) 2026 KiwifruitDev and contributors
+
+This combined work is licensed under the GNU General Public License,
+version 3 or (at your option) any later version. See COPYING (next to this
+file in a build, or in the ps3xport-wasm repository root) for the full text.
+
+The following parts keep their original licences:
+
+- web panel drivers copied from ps3xport-wasm (engine.js, worker.js, pxfs.js,
+  host-directory.js, host-remote.js, sync-bridge.js, layout.js, writer.js,
+  zip.js): MIT, Copyright (C) 2026 KiwifruitDev.
+- The ps3xport WebAssembly core (ps3xport.js, ps3xport.wasm): GPL-3.0-or-later,
+  Copyright 2015 Kakaroto.
+- The PKG reader port (src/pkg.js): MIT, Copyright (C) 2026 Aphelion,
+  ported from https://github.com/AphelionWasTaken/PyKG.
+- The coalesced reader/writer port (src/coalesced.js): GPL-3.0, ported from
+  https://github.com/ripdajacker/coalesced-inifier.
+
+The page, wizard and patch logic (src/app.js, src/ui.js, src/config.js,
+src/archive-patch.js, src/coi-sw.js and the Astro page) are also available
+under the MIT licence at the copyright holder's option.

@@ -1,0 +1,11 @@
+{
+  "name": "arkham-patcher",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Browser-side Batman: Arkham Origins PS3 update patcher for Arkham: Revived",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/"
+  }
+}
