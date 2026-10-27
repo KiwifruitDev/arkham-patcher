@@ -1,6 +1,6 @@
 # Arkham: Revived - PS3 patcher
 
-The browser tool behind <https://kiwifruitdev.com/arkhamrevived/ps3-tutorial/>.
+The browser tool behind the [Arkham: Revived Redux PS3 tutorial](https://kiwifruitdev.com/arkhamrevived/ps3-tutorial/).
 It patches **Batman: Arkham Origins** on PlayStation 3 so the multiplayer
 client connects to Arkham: Revived.
 
@@ -14,6 +14,10 @@ patched. Depending on the firmware answer:
   copy with multiMAN (mmCM), the backup is never touched.
 
 There is no backend. The page is static and can be served by GitHub Pages.
+
+> [!NOTE]
+> Significant portions of this codebase were developed with AI assistance using
+> [DeepSeek](https://www.deepseek.com/) and [GitHub Copilot](https://github.com/features/copilot).
 
 ## Why the PKGs are hosted here
 
@@ -63,11 +67,34 @@ against `public/arkhamrevived/ps3/COALESCED_INT.BIN`).
 
 ## Page
 
-`src/app.js` + `src/ui.js` implement the paginated wizard: firmware question,
-USB/backup/restore/safe-mode/rebuild instructions for OFW, region/edition
-selection, the patch progress (status, bar, ETA, elapsed), and the download or
-in-place install result. Mobile devices get an "use a computer" notice with an
-"I understand" option, folder selection is hidden there.
+`src/app.js` + `src/ui.js` implement the paginated wizard. For OFW it starts
+with the USB drive: what kind of device it is (card readers and SATA-to-USB
+adapters get a "the PS3 may not accept this" warning but can continue), how
+much free space it has, which computer the user is on, and whether the drive is
+already FAT32 on an MBR disk. If it is not, the flow branches per operating
+system:
+
+- **Windows**: asks whether Rufus has been used before and then shows either a
+  short or a full walkthrough (Non bootable, MBR, Large FAT32) with the
+  screenshot from `/img/arkhamrevived/rufus.png`.
+- **Linux**: asks whether a partition manager has been used. If not, it probes
+  for Disks, KDE Partition Manager and GParted in turn, falling back to the
+  distribution (Ubuntu, Debian, Fedora, Arch, unknown) and an install step.
+  Either way it ends on a per-tool guide (GParted, KDE Partition Manager,
+  Disks), and "Skip, I know what I am doing" jumps straight ahead.
+- **macOS**: asks the same partition-manager question and then shows Disk
+  Utility instructions (short or full).
+
+Both paths then ask the user to confirm the PS3 lists the drive in Backup
+Utility, with troubleshooting when it does not, before the game data, backup,
+restore, safe-mode and rebuild steps. Every formatting page repeats a checklist
+for the three hard requirements: one partition, FAT32, MBR.
+
+The rest of the wizard is region/edition selection, the patch progress (status,
+bar, ETA, elapsed), and the download or in-place install result. Mobile devices
+get an "use a computer" notice with an "I understand" option, folder selection
+is hidden there, and desktop browsers that are not Chromium-based get a similar
+warning that they can dismiss.
 
 ### Cross-origin isolation
 

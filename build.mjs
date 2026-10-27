@@ -41,6 +41,14 @@ for (const name of wasmFiles) {
   }
 }
 
+// The GPL text next to the WebAssembly core was renamed from COPYING to
+// LICENSE; accept either name.
+const gplText = [join(projectRoot, 'COPYING'), join(projectRoot, 'LICENSE')].find(existsSync);
+if (!gplText) {
+  console.error(`Missing the GPL text (COPYING or LICENSE) in ${projectRoot}.`);
+  process.exit(1);
+}
+
 mkdirSync(appDir, { recursive: true });
 rmSync(appDir, { recursive: true, force: true });
 mkdirSync(appDir, { recursive: true });
@@ -60,7 +68,7 @@ writeFileSync(join(appDir, 'worker.js'), worker.replace('./ps3xport.mjs', './ps3
 
 cpSync(join(here, 'src', 'coi-sw.js'), join(siteRoot, 'coi-sw.js'));
 cpSync(join(here, 'LICENSE'), join(appDir, 'LICENSE'));
-cpSync(join(projectRoot, 'COPYING'), join(appDir, 'COPYING'));
+cpSync(gplText, join(appDir, 'COPYING'));
 
 const publicRoot = join(projectRoot, 'kiwifruitdev.com', 'public');
 writeFileSync(join(publicRoot, '_headers'), [

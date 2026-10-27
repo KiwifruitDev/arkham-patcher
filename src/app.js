@@ -27,6 +27,17 @@ const state = {
   mobile: detectMobile(),
   folderPicker: supportsFolderPicker(),
   mobileAcknowledged: false,
+  browserAcknowledged: false,
+  driveKind: null,
+  usbFree: null,
+  os: null,
+  formatKnown: null,
+  rufusUsed: null,
+  pmUsed: null,
+  linuxProbes: {},
+  linuxDistro: null,
+  linuxManager: null,
+  plugConfirmed: null,
   backup: null,
   backupBusy: false,
   backupError: null,
@@ -113,12 +124,12 @@ const firmwareStep = {
 
     return h('div', { class: 'ak-page' },
       h('h2', {}, 'What firmware is your PS3 running?'),
-      h('p', {}, 'This decides how the patch is installed. You can go back and change it at any time.'),
+      h('p', {}, 'This decides how the patch is installed. You can go back and change it at any time. This tutorial does not cover installing HEN or CFW. If you are unsure, select "OFW (original firmware".'),
       h('div', { class: 'ak-choice-grid' },
         card('cfw', 'CFW or HEN', 'Your PS3 can run homebrew. No backup or restore is needed: you get a zip of patched files for multiMAN (mmCM).', 'Jailbroken'),
         card('ofw', 'OFW (original firmware)', 'Stock firmware with no homebrew. The patch is applied to a Backup Utility backup, then restored on the PS3.', 'Stock'),
       ),
-      h('p', { class: 'ak-note' }, 'CFW = custom firmware. HEN = the Hybrid Firmware Enabler used on some PS3 models.'),
+      h('p', { class: 'ak-note' }, 'CFW = custom firmware. HEN = the Homebrew Enabler used with HFW (Hybrid Firmware).'),
     );
   },
 };
@@ -134,39 +145,695 @@ function chooseMode(mode) {
   wizard.go(1);
 }
 
-/* --------------------------------------------------------------- OFW pages */
+/* --------------------------------------------------------- OFW drive setup */
 
-const ofwUsb = {
-  id: 'ofw-usb',
-  title: 'Prepare a USB drive',
+const DRIVE_CHOICES = [
+  { value: 'usb', tag: 'Recommended', heading: 'USB flash drive', text: 'A normal USB stick plugged straight into the console.' },
+  { value: 'sd', tag: 'May not work', heading: 'SD card reader', text: 'An SD card in a USB card reader, or a card slot on the console.' },
+  { value: 'sata', tag: 'May not work', heading: 'SATA to USB adapter', text: 'A hard drive or SSD in a SATA-to-USB adapter or enclosure.' },
+];
+
+const FREE_SPACE_CHOICES = [
+  { value: 'under32', heading: 'Under 32 GB', text: 'Smaller than most PS3 backups.' },
+  { value: '32to128', heading: '32 GB to 128 GB' },
+  { value: '128to512', heading: '128 GB to 512 GB' },
+  { value: '512plus', heading: '512 GB or more' },
+  { value: 'unknown', heading: "I don't know", text: 'This page explains how to check.' },
+];
+
+const OS_CHOICES = [
+  { value: 'windows', heading: 'Windows', text: 'Windows 10 or 11 on a desktop or laptop.' },
+  { value: 'macos', heading: 'macOS', text: 'macOS on a MacBook, iMac, Mac mini, Mac Studio, or Mac Pro.' },
+  { value: 'linux', heading: 'Linux', text: 'Such as Ubuntu, Debian, Fedora, Arch Linux, etc.' },
+];
+
+function strong(text) {
+  return h('strong', {}, text);
+}
+
+function choiceCard(item) {
+  return h('button', {
+    type: 'button',
+    class: `ak-choice${item.selected ? ' ak-choice-selected' : ''}`,
+    onclick: item.onclick,
+  },
+    item.tag ? h('span', { class: 'ak-choice-tag' }, item.tag) : null,
+    h('strong', {}, item.heading),
+    item.text ? h('span', {}, item.text) : null,
+  );
+}
+
+function choiceGrid(items) {
+  return h('div', { class: 'ak-choice-grid' }, items.map(choiceCard));
+}
+
+function resetFormatFlow() {
+  state.rufusUsed = null;
+  state.pmUsed = null;
+  state.linuxProbes = {};
+  state.linuxDistro = null;
+  state.linuxManager = null;
+  state.plugConfirmed = null;
+}
+
+function chooseFrom(currentId, updates, { resetFlow = false } = {}) {
+  Object.assign(state, updates);
+  if (resetFlow) resetFormatFlow();
+  wizard.setSteps(buildFlow());
+  const index = wizard.steps.findIndex(step => step.id === currentId);
+  wizard.go(index >= 0 ? index + 1 : wizard.index);
+}
+
+function formatChecklist() {
+  return h('div', { class: 'ak-callout' },
+    strong('Before you continue, confirm all four'),
+    h('ul', { class: 'ak-list' },
+      h('li', {}, 'The drive has a ', strong('single'), ' partition.'),
+      h('li', {}, 'That partition is ', strong('FAT32'), ' - not exFAT, not NTFS.'),
+      h('li', {}, 'The drive uses the ', strong('MBR'), ' partition table - not GPT.'),
+      h('li', {}, 'Anything you wanted to keep from the drive has been copied elsewhere.'),
+    ),
+  );
+}
+
+const ofwDrive = {
+  id: 'ofw-drive',
+  title: 'Choose a USB drive',
+  nextLabel: () => (state.driveKind === 'sd' || state.driveKind === 'sata' ? 'Continue anyway' : null),
   render() {
+    const risky = state.driveKind === 'sd' || state.driveKind === 'sata';
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '1. Prepare a USB drive'),
-      h('p', {}, 'You need a USB storage device the PS3 can read (FAT32 is fine). It must have ', h('strong', {}, 'at least as much free space as the data currently on your PS3 hard drive'), ', because Backup Utility copies everything.'),
+      h('h2', {}, '1. Choose a USB drive'),
+      h('p', {}, 'The PS3 Backup Utility reads ', strong('FAT32'), ' storage only. A plain USB flash drive is by far the most reliable choice.'),
+      choiceGrid(DRIVE_CHOICES.map(item => ({
+        selected: state.driveKind === item.value,
+        tag: item.tag,
+        heading: item.heading,
+        text: item.text,
+        onclick: () => {
+          if (item.value === 'usb') {
+            chooseFrom('ofw-drive', { driveKind: item.value });
+            return;
+          }
+          state.driveKind = item.value;
+          wizard.refresh();
+        },
+      }))),
+      risky ? h('div', { class: 'ak-status ak-status-error' },
+        strong('The PS3 may not accept this device'),
+        h('p', {}, state.driveKind === 'sd'
+          ? 'SD cards in a USB reader are often not detected by the PS3. Some readers work, many do not, and the PS3 has no list of supported ones.'
+          : 'SATA-to-USB adapters are often not detected by the PS3. Some chipsets work, many do not.'),
+        h('p', {}, 'You can still try it: if the drive shows up in Backup Utility later in this guide, it works. If it does not, switch to a normal USB flash drive.'),
+      ) : null,
       h('div', { class: 'ak-callout' },
-        h('strong', {}, 'Example'),
-        h('p', {}, 'If your PS3 has a 500 GB drive with 300 GB used, the USB drive needs at least 300 GB free. Free space on the USB is what matters, not its total size.'),
+        strong('A note on exFAT'),
+        h('p', {}, 'Stock firmware does not read exFAT or NTFS drives, and it cannot read a disk that uses the GPT partition table. The drive has to be FAT32 on an MBR disk, which is what the next pages set up.'),
       ),
-      h('p', {}, 'Format the drive as FAT32 or exFAT, plug it into the PS3, and keep it there for the next two steps.'),
-      h('p', { class: 'ak-note' }, 'Leave at least a few GB free beyond that: the patcher writes the changed data chunks next to the backup before replacing them.'),
-      h('p', { class: 'ak-note' }, 'The backup is a full copy of your PS3. Nothing is uploaded by this page - the patch itself runs on your computer.'),
     );
   },
 };
+
+const ofwSize = {
+  id: 'ofw-size',
+  title: 'Check the drive size',
+  nextLabel: () => (state.usbFree ? 'Continue' : null),
+  canNext: () => Boolean(state.usbFree),
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '2. Check the drive has enough space'),
+      h('p', {}, 'Backup Utility copies everything on the PS3 hard drive, so the USB drive needs ', strong('at least as much free space as the data currently in use on the PS3'), '.'),
+      h('div', { class: 'ak-callout' },
+        strong('Example'),
+        h('p', {}, 'If the PS3 has a 500 GB drive with 300 GB used, the USB drive needs at least 300 GB free. Free space is what matters, not the total size of the drive.'),
+      ),
+      h('p', { class: 'ak-note' }, 'Leave a few GB extra: the patcher writes the changed data next to the backup before replacing it.'),
+      h('p', {}, 'How much free space does the drive have?'),
+      choiceGrid(FREE_SPACE_CHOICES.map(item => ({
+        selected: state.usbFree === item.value,
+        heading: item.heading,
+        text: item.text,
+        onclick: () => {
+          state.usbFree = item.value;
+          wizard.refresh();
+        },
+      }))),
+      state.usbFree === 'under32' ? h('div', { class: 'ak-status ak-status-error' },
+        strong('That is probably too small'),
+        h('p', {}, 'Most PS3 backups are well over 32 GB. Only continue if you know your PS3 has very little data on it - check Settings -> System Settings -> System Information on the console for the used space.'),
+        h('p', {}, 'If the PS3 has more data than this, use a bigger drive. The backup cannot be split across several drives.'),
+      ) : null,
+      state.usbFree === 'unknown' ? h('p', { class: 'ak-note' }, 'Check the free space in your file manager: on Windows, right-click the drive in This PC and open Properties; on macOS, right-click the drive in Finder and choose Get Info; on Linux, open the drive in your file manager or run df -h in a terminal.') : null,
+      h('details', { class: 'ak-details' },
+        h('summary', {}, 'How do I find out how much data is on my PS3?'),
+        h('ol', { class: 'ak-list' },
+          h('li', {}, 'On the PS3, open ', strong('Settings'), ' -> ', strong('System Settings'), ' -> ', strong('System Information'), '.'),
+          h('li', {}, 'The screen shows the capacity and the free space of the hard drive. Used space is capacity minus free space.'),
+        ),
+        h('p', { class: 'ak-note' }, 'The backup is slightly larger than the used space, so round up to the next common drive size.'),
+      ),
+    );
+  },
+};
+
+const ofwOs = {
+  id: 'ofw-os',
+  title: 'Choose your computer',
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '3. Which computer are you using?'),
+      h('p', {}, 'The next pages show how to format the drive on your computer. The result is always the same: one FAT32 partition on an MBR disk.'),
+      choiceGrid(OS_CHOICES.map(item => ({
+        selected: state.os === item.value,
+        heading: item.heading,
+        text: item.text,
+        onclick: () => chooseFrom('ofw-os', { os: item.value }, { resetFlow: true }),
+      }))),
+    );
+  },
+};
+
+function formatCheckDetails() {
+  if (state.os === 'windows') {
+    return h('details', { class: 'ak-details' },
+      h('summary', {}, 'How do I check the drive on Windows?'),
+      h('ol', { class: 'ak-list' },
+        h('li', {}, 'Right-click ', strong('Start'), ' and open ', strong('Disk Management'), '. Find your drive in the list of disks.'),
+        h('li', {}, 'Right-click the name of the disk on the left (for example "Disk 1") and choose ', strong('Properties'), ' -> ', strong('Volumes'), '. The ', strong('Partition style'), ' must be ', strong('Master Boot Record'), '.'),
+        h('li', {}, 'The drive must show exactly one volume, marked ', strong('FAT32'), '. If it says exFAT, NTFS or RAW, it has to be formatted.'),
+        h('li', {}, 'If there are extra volumes, delete them and start again - the PS3 needs a single partition.'),
+      ),
+    );
+  }
+  if (state.os === 'macos') {
+    return h('details', { class: 'ak-details' },
+      h('summary', {}, 'How do I check the drive on macOS?'),
+      h('ol', { class: 'ak-list' },
+        h('li', {}, 'Open ', strong('Disk Utility'), ' and choose ', strong('View'), ' -> ', strong('Show All Devices'), '.'),
+        h('li', {}, 'Select the drive itself (the top-level entry, not the volume under it), then click ', strong('Info'), '. The ', strong('Partition Map Scheme'), ' must be ', strong('Master Boot Record'), '.'),
+        h('li', {}, 'The drive must have exactly one volume, formatted as MS-DOS (FAT). That is macOS\'s name for FAT32.'),
+      ),
+    );
+  }
+  return h('details', { class: 'ak-details' },
+    h('summary', {}, 'How do I check the drive on Linux?'),
+    h('ol', { class: 'ak-list' },
+      h('li', {}, 'Open your partition manager (GParted, KDE Partition Manager or Disks).'),
+      h('li', {}, 'Select the drive. The partition table type must be ', strong('msdos'), ' (MBR), not gpt.'),
+      h('li', {}, 'The drive must have exactly one partition, of type ', strong('fat32'), ' (GParted shows it as W95 FAT32).'),
+    ),
+    h('p', { class: 'ak-note' }, 'The same information is shown by sudo parted -l in a terminal.'),
+  );
+}
+
+const ofwFormat = {
+  id: 'ofw-format',
+  title: "Check the drive's format",
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '4. Is the drive already FAT32 with an MBR partition table?'),
+      h('p', {}, 'The PS3 only reads a ', strong('FAT32'), ' partition from a disk that uses the ', strong('MBR'), ' partition table. An exFAT or NTFS drive, or a disk formatted as GPT, will not appear in Backup Utility at all.'),
+      choiceGrid([
+        {
+          selected: state.formatKnown === true,
+          tag: 'Skips formatting',
+          heading: 'Yes, it is FAT32 and MBR',
+          text: 'You already know the drive is set up correctly, so go straight to checking it on the PS3.',
+          onclick: () => chooseFrom('ofw-format', { formatKnown: true }, { resetFlow: true }),
+        },
+        {
+          selected: state.formatKnown === false,
+          heading: 'No, or not sure',
+          text: 'Show the steps to check and format the drive.',
+          onclick: () => chooseFrom('ofw-format', { formatKnown: false }, { resetFlow: true }),
+        },
+      ]),
+      formatCheckDetails(),
+      h('p', { class: 'ak-note' }, 'If you are not sure, pick "No, or not sure" - the next pages check every requirement and only erase the drive if it needs formatting.'),
+    );
+  },
+};
+
+/* ------------------------------------------------- Windows (Rufus) pages */
+
+const RUFUS_URL = 'https://rufus.ie/en/';
+
+function rufusSteps(verbose) {
+  if (verbose) {
+    return [
+      'Plug the USB drive into the computer. All data on it will be erased, so copy anything you want to keep somewhere else first.',
+      'Download the Standard edition of Rufus from rufus.ie and open it. Make sure you select the correct architecture for your system (x64, x86, or ARM64), and do not use the Portable build.',
+      'In Rufus, open the Device list and select your USB drive. Check the drive letter and the size, because the drive you pick is the drive that gets erased.',
+      'Set Boot selection to Non bootable.',
+      'Set Partition scheme to MBR. The PS3 cannot read GPT disks.',
+      'Set File system to Large FAT32. Plain FAT32 stops at 32 GB, which is why Windows itself cannot format a bigger drive as FAT32; Large FAT32 formats the whole drive.',
+      'Click START, accept the warning that everything on the drive will be destroyed, and wait for "READY" to appear.',
+    ];
+  }
+  return [
+    'Plug the USB drive into the computer. Everything on it will be erased.',
+    'Download the Standard edition of Rufus from rufus.ie (not the Portable build) and open it.',
+    'Select your USB drive under Device.',
+    'Set Boot selection to Non bootable.',
+    'Make sure Partition scheme says MBR and File system says Large FAT32.',
+    'Click START and confirm that everything on the drive can be erased.',
+  ];
+}
+
+function rufusScreenshot() {
+  const image = h('img', {
+    class: 'ak-shot',
+    src: '/img/arkhamrevived/rufus.png',
+    alt: 'Rufus with the USB drive selected, Boot selection set to Non bootable, Partition scheme set to MBR and File system set to Large FAT32',
+    loading: 'lazy',
+  });
+  return h('div', {},
+    h('a', { class: 'ak-shot-link', href: '/img/arkhamrevived/rufus.png', target: '_blank', rel: 'noreferrer' }, image),
+    h('p', { class: 'ak-note' }, 'Rufus with the correct settings: Non bootable, MBR and Large FAT32. Click the image to open it full size.'),
+  );
+}
+
+const ofwWindowsKnow = {
+  id: 'ofw-windows-know',
+  title: 'Rufus experience',
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Format the drive with Rufus'),
+      h('p', {}, 'Windows can only create FAT32 partitions up to 32 GB in Disk Management, so a larger drive needs Rufus. Rufus can format the whole drive as FAT32 with an MBR partition table in one go.'),
+      h('p', {}, 'Have you used Rufus to format a drive as FAT32 with the MBR partition scheme before?'),
+      choiceGrid([
+        {
+          selected: state.rufusUsed === true,
+          heading: 'Yes, I have used Rufus before',
+          text: 'Show the short version of the steps.',
+          onclick: () => chooseFrom('ofw-windows-know', { rufusUsed: true }),
+        },
+        {
+          selected: state.rufusUsed === false,
+          heading: 'No, or I want the full walkthrough',
+          text: 'Explain every setting in Rufus.',
+          onclick: () => chooseFrom('ofw-windows-know', { rufusUsed: false }),
+        },
+      ]),
+    );
+  },
+};
+
+const ofwWindowsGuide = {
+  id: 'ofw-windows-guide',
+  title: 'Format with Rufus',
+  nextLabel: () => 'Continue',
+  render() {
+    const verbose = state.rufusUsed === false;
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Format the drive with Rufus'),
+      h('p', {}, 'Download Rufus from ', link(RUFUS_URL, 'rufus.ie'), ': pick the ', strong('Standard'), ' build for your PC. Do not download the Portable build, and make sure you select the correct architecture for your system (x64, x86, or ARM64).'),
+      h('ol', { class: 'ak-list' }, rufusSteps(verbose).map(step => h('li', {}, step))),
+      rufusScreenshot(),
+      verbose ? h('div', { class: 'ak-status ak-status-error' },
+        strong('Everything on the drive is deleted'),
+        h('p', {}, 'Rufus erases the whole drive when you click START. Copy any files you want to keep to another drive first.'),
+      ) : null,
+      h('p', { class: 'ak-note' }, 'If File system does not offer Large FAT32, Rufus did not detect the drive as removable - check the Device selection again.'),
+      formatChecklist(),
+    );
+  },
+};
+
+/* ---------------------------------------------------------- Linux pages */
+
+const LINUX_DISTROS = [
+  { value: 'ubuntu', heading: 'Ubuntu', command: 'sudo apt install gparted' },
+  { value: 'debian', heading: 'Debian', command: 'sudo apt install gparted' },
+  { value: 'fedora', heading: 'Fedora', command: 'sudo dnf install gparted' },
+  { value: 'arch', heading: 'Arch Linux', command: 'sudo pacman -S gparted' },
+  { value: 'unknown', heading: "I don't know", command: null },
+];
+
+const LINUX_GUIDES = {
+  gparted: {
+    heading: 'GParted',
+    steps: verbose => verbose ? [
+      'Open GParted. If it asks for a password, enter your own - it needs root privileges to write to the drive.',
+      'Pick your USB drive in the drop-down list at the top right. Check the size and model so you do not pick your system disk.',
+      'Choose Device -> Create Partition Table, select msdos and click Apply. This replaces the partition table with MBR and erases the whole drive.',
+      'Right-click the unallocated space and choose New. Set New size to the whole space and File system to fat32, then click Add.',
+      'Click the green tick (Apply All Operations) and confirm.',
+    ] : [
+      'Open GParted and pick your USB drive in the list at the top right.',
+      'Device -> Create Partition Table -> msdos.',
+      'Right-click the unallocated space -> New -> File system: fat32 -> Add.',
+      'Click Apply All Operations.',
+    ],
+  },
+  kde: {
+    heading: 'KDE Partition Manager',
+    steps: verbose => verbose ? [
+      'Open KDE Partition Manager. It asks for your password because it needs root privileges.',
+      'Select your USB drive under Devices on the left. Check the size and model so you do not pick your system disk.',
+      'Choose Device -> Create New Partition Table, select msdos (MBR) and click OK. This erases the whole drive.',
+      'Right-click the unallocated space and choose New. Pick FAT32 as the file system and use the whole size, then click OK.',
+      'Click Apply (or Save Operations) and confirm.',
+    ] : [
+      'Open KDE Partition Manager and select your USB drive.',
+      'Device -> Create New Partition Table -> msdos (MBR).',
+      'Right-click the unallocated space -> New -> FAT32 -> OK.',
+      'Click Apply.',
+    ],
+  },
+  disks: {
+    heading: 'Disks (GNOME)',
+    steps: verbose => verbose ? [
+      'Open Disks (it may be called "Disks" or "GNOME Disks" in your applications menu).',
+      'Select your USB drive in the list on the left. Check the size and model so you do not pick your system disk.',
+      'Open the menu at the top right (three dots) and choose Format Disk. Set Partitioning to "Compatible with all systems (MBR)" and click Format. This erases the whole drive.',
+      'Select the free space that appears under the drive, click the + button, set Type to FAT and use the whole size, then click Create.',
+    ] : [
+      'Open Disks and select your USB drive.',
+      'Menu -> Format Disk -> "Compatible with all systems (MBR)" -> Format.',
+      'Select the free space -> + -> Type: FAT, whole size -> Create.',
+    ],
+  },
+};
+
+const ofwLinuxKnow = {
+  id: 'ofw-linux-know',
+  title: 'Format the drive',
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Format the drive as FAT32'),
+      h('p', {}, 'Linux distributions ship with different tools for this, so the guide depends on what you have. Anything that can write an MBR table and a FAT32 partition will do.'),
+      h('p', {}, 'Have you used a partition manager (GParted, KDE Partition Manager, Disks) before?'),
+      choiceGrid([
+        {
+          selected: state.pmUsed === true,
+          heading: 'Yes, I have',
+          text: 'Pick the tool you want to use and see short instructions.',
+          onclick: () => chooseFrom('ofw-linux-know', { pmUsed: true }),
+        },
+        {
+          selected: state.pmUsed === false,
+          heading: 'No, help me find one',
+          text: 'Check which partition manager is installed and get a step-by-step walkthrough.',
+          onclick: () => chooseFrom('ofw-linux-know', { pmUsed: false }),
+        },
+      ]),
+    );
+  },
+};
+
+const ofwLinuxManager = {
+  id: 'ofw-linux-manager',
+  title: 'Pick a partition manager',
+  nextLabel: () => null,
+  render() {
+    const verbose = state.pmUsed === false;
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Select which partition manager you would like to use'),
+      h('p', {}, verbose
+        ? 'Pick the tool you just installed (or found in your applications menu). Short instructions follow either way.'
+        : 'Pick the tool you would like to use and the steps for it are shown next.'),
+      choiceGrid([
+        {
+          selected: state.linuxManager === 'gparted',
+          tag: 'Recommended',
+          heading: 'GParted',
+          text: 'The most common tool for this, and the easiest to follow.',
+          onclick: () => chooseFrom('ofw-linux-manager', { linuxManager: 'gparted' }),
+        },
+        {
+          selected: state.linuxManager === 'kde',
+          heading: 'KDE Partition Manager',
+          text: 'Usually included with KDE Plasma.',
+          onclick: () => chooseFrom('ofw-linux-manager', { linuxManager: 'kde' }),
+        },
+        {
+          selected: state.linuxManager === 'disks',
+          heading: 'Disks (GNOME)',
+          text: 'Usually included with GNOME, simple but less detailed.',
+          onclick: () => chooseFrom('ofw-linux-manager', { linuxManager: 'disks' }),
+        },
+        {
+          tag: 'Advanced',
+          heading: 'Skip, I know what I am doing',
+          text: 'Format the drive yourself: one FAT32 partition on an MBR disk, then continue.',
+          onclick: () => wizard.goToId('ofw-plug-check'),
+        },
+      ]),
+    );
+  },
+};
+
+function linuxProbeStep({ id, title, question, search, manager }) {
+  return {
+    id: `ofw-linux-${id}`,
+    title,
+    nextLabel: () => null,
+    render() {
+      const answer = state.linuxProbes[id];
+      return h('div', { class: 'ak-page' },
+        h('h2', {}, '5. Find a partition manager'),
+        h('p', {}, 'Open your applications menu (or the Activities overview) and search for ', strong(search), '.'),
+        h('p', {}, question),
+        choiceGrid([
+          {
+            selected: answer === true,
+            heading: 'Yes, it is there',
+            text: 'Show the steps for it.',
+            onclick: () => chooseFrom(`ofw-linux-${id}`, {
+              linuxManager: manager,
+              linuxProbes: { ...state.linuxProbes, [id]: true },
+            }),
+          },
+          {
+            selected: answer === false,
+            heading: 'No, it is not installed',
+            text: 'Check for another tool.',
+            onclick: () => chooseFrom(`ofw-linux-${id}`, {
+              linuxProbes: { ...state.linuxProbes, [id]: false },
+            }),
+          },
+        ]),
+      );
+    },
+  };
+}
+
+const ofwLinuxDisks = linuxProbeStep({
+  id: 'disks',
+  title: 'Look for Disks',
+  search: 'Disks',
+  question: 'Does an application named "Disks" show up?',
+  manager: 'disks',
+});
+
+const ofwLinuxPartition = linuxProbeStep({
+  id: 'partition',
+  title: 'Look for KDE Partition Manager',
+  search: 'Partition',
+  question: 'Does an application named "KDE Partition Manager" show up?',
+  manager: 'kde',
+});
+
+const ofwLinuxGparted = linuxProbeStep({
+  id: 'gparted',
+  title: 'Look for GParted',
+  search: 'GParted',
+  question: 'Does an application named "GParted" show up?',
+  manager: 'gparted',
+});
+
+const ofwLinuxDistro = {
+  id: 'ofw-linux-distro',
+  title: 'Choose your distribution',
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. No partition manager found'),
+      h('p', {}, 'None of the usual partition managers are installed. One quick install fixes that. Which distribution are you using?'),
+      choiceGrid(LINUX_DISTROS.map(item => ({
+        selected: state.linuxDistro === item.value,
+        heading: item.heading,
+        onclick: () => chooseFrom('ofw-linux-distro', { linuxDistro: item.value }),
+      }))),
+    );
+  },
+};
+
+const ofwLinuxInstall = {
+  id: 'ofw-linux-install',
+  title: 'Install a partition manager',
+  nextLabel: () => 'Continue',
+  render() {
+    const distro = LINUX_DISTROS.find(item => item.value === state.linuxDistro);
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Install GParted'),
+      distro?.command
+        ? h('div', {},
+          h('p', {}, `Open a terminal and run this on ${distro.heading}:`),
+          h('pre', { class: 'ak-command' }, distro.command),
+          h('p', { class: 'ak-note' }, 'It asks for your password and downloads a few MB.'),
+        )
+        : h('div', {},
+          h('p', {}, 'Open your distribution\'s software centre and search for ', strong('GParted'), ' (or ', strong('Disks'), ' / ', strong('GNOME Disks'), '). If you prefer a terminal, install the gparted package with your normal package manager.'),
+        ),
+      h('p', {}, 'Once it is installed, open it from your applications menu and continue.'),
+    );
+  },
+};
+
+const ofwLinuxGuide = {
+  id: 'ofw-linux-guide',
+  title: 'Format on Linux',
+  nextLabel: () => 'Continue',
+  render() {
+    const guide = LINUX_GUIDES[state.linuxManager];
+    const verbose = state.pmUsed === false;
+    if (!guide) {
+      return h('div', { class: 'ak-page' },
+        h('h2', {}, '5. Format the drive as FAT32'),
+        h('p', {}, 'Format the drive yourself: one FAT32 partition on an MBR disk.'),
+        formatChecklist(),
+      );
+    }
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, `5. Format the drive with ${guide.heading}`),
+      h('ol', { class: 'ak-list' }, guide.steps(verbose).map(step => h('li', {}, step))),
+      verbose ? h('div', { class: 'ak-status ak-status-error' },
+        strong('This erases the whole drive'),
+        h('p', {}, 'Creating the partition table wipes every file on the drive. Copy anything you want to keep somewhere else first.'),
+      ) : null,
+      formatChecklist(),
+    );
+  },
+};
+
+/* ----------------------------------------------------------- macOS pages */
+
+const ofwMacKnow = {
+  id: 'ofw-macos-know',
+  title: 'Format the drive',
+  nextLabel: () => null,
+  render() {
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Format the drive with Disk Utility'),
+      h('p', {}, 'Disk Utility can erase the drive and set it up as FAT32 with an MBR partition table. No extra software is needed.'),
+      h('p', {}, 'Have you used Disk Utility (or a partition manager) to erase and partition a drive before?'),
+      choiceGrid([
+        {
+          selected: state.pmUsed === true,
+          heading: 'Yes, I have',
+          text: 'Show the short version of the steps.',
+          onclick: () => chooseFrom('ofw-macos-know', { pmUsed: true }),
+        },
+        {
+          selected: state.pmUsed === false,
+          heading: 'No, walk me through it',
+          text: 'Explain each step in Disk Utility.',
+          onclick: () => chooseFrom('ofw-macos-know', { pmUsed: false }),
+        },
+      ]),
+    );
+  },
+};
+
+const ofwMacGuide = {
+  id: 'ofw-macos-guide',
+  title: 'Disk Utility',
+  nextLabel: () => 'Continue',
+  render() {
+    const verbose = state.pmUsed === false;
+    const steps = verbose ? [
+      'Open Disk Utility: press Command and Space, type Disk Utility, then press Return. It is also in Applications -> Utilities.',
+      'Choose View -> Show All Devices. Without this, Disk Utility only lists the volumes on each drive and you cannot set the partition scheme.',
+      'Select the drive itself in the sidebar - the top-level entry, not the volume below it. Check the size and name so you do not pick your startup disk.',
+      'Click Erase at the top of the window.',
+      'Set Name to something like PS3, Format to MS-DOS (FAT) and Scheme to Master Boot Record. MS-DOS (FAT) is macOS\'s name for FAT32.',
+      'Click Erase and confirm. Everything on the drive is deleted, and you get a single FAT32 partition on an MBR disk.',
+    ] : [
+      'Open Disk Utility and choose View -> Show All Devices.',
+      'Select the drive (not the volume below it) and click Erase.',
+      'Set Format to MS-DOS (FAT) and Scheme to Master Boot Record.',
+      'Click Erase and confirm.',
+    ];
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '5. Format the drive with Disk Utility'),
+      h('ol', { class: 'ak-list' }, steps.map(step => h('li', {}, step))),
+      verbose ? h('div', { class: 'ak-status' },
+        strong('If Scheme is not shown'),
+        h('p', {}, 'You selected a volume instead of the drive. Go back one level in the sidebar and select the drive itself (the entry with the size and connection type under it).'),
+      ) : null,
+      h('p', { class: 'ak-note' }, 'Formatting erases the whole drive. Copy anything you want to keep somewhere else first.'),
+      formatChecklist(),
+    );
+  },
+};
+
+/* ------------------------------------------------------------ plug in page */
+
+const ofwPlugCheck = {
+  id: 'ofw-plug-check',
+  title: 'Confirm the PS3 sees the drive',
+  nextLabel: () => (state.plugConfirmed === null ? null : 'Continue'),
+  render() {
+    const failed = state.plugConfirmed === false;
+    return h('div', { class: 'ak-page' },
+      h('h2', {}, '6. Check the PS3 can see the drive'),
+      h('p', {}, 'Plug the drive into the PS3 and open ', strong('Settings'), ' -> ', strong('System Settings'), ' -> ', strong('Backup Utility'), '. If the PS3 can read it, the drive is listed there as a USB device.'),
+      h('p', { class: 'ak-note' }, 'Nothing is written to the drive yet, so you can unplug it again straight away. This step only proves the PS3 accepts it before you spend time on the backup.'),
+      state.plugConfirmed === true ? h('p', { class: 'ak-note' }, 'The PS3 accepted the drive. Continue to delete the old game data on the console.') : null,
+      choiceGrid([
+        {
+          selected: state.plugConfirmed === true,
+          heading: 'Yes, Backup Utility lists the drive',
+          text: 'Continue to the game data and backup steps.',
+          onclick: () => chooseFrom('ofw-plug-check', { plugConfirmed: true }),
+        },
+        {
+          selected: failed,
+          heading: 'No, nothing shows up',
+          text: 'Show what to check.',
+          onclick: () => {
+            state.plugConfirmed = false;
+            wizard.refresh();
+          },
+        },
+      ]),
+      failed ? h('div', { class: 'ak-status ak-status-error' },
+        strong('The PS3 cannot read the drive yet'),
+        h('ul', { class: 'ak-list' },
+          h('li', {}, 'The drive must be one FAT32 partition on an MBR disk. exFAT and NTFS volumes are ignored, and so is a GPT disk.'),
+          h('li', {}, 'More than one partition can confuse Backup Utility. Format it again so it has a single FAT32 partition.'),
+          h('li', {}, state.driveKind === 'sd' || state.driveKind === 'sata'
+            ? 'Card readers and SATA-to-USB adapters are frequently not detected by the PS3. This is the most likely cause here - try a plain USB flash drive.'
+            : 'Try the other USB port on the front of the PS3 and check the drive is fully inserted.'),
+          h('li', {}, 'Give the Backup Utility screen a few seconds, or leave and reopen it, so it can rescan the ports.'),
+        ),
+        h('p', {}, 'You can continue anyway - the patcher writes the backup archive regardless. The PS3 just will not be able to restore it until it can read the drive, so fixing this now saves time later.'),
+      ) : null,
+    );
+  },
+};
+
+/* ------------------------------------------------------------- OFW pages */
 
 const ofwDelete = {
   id: 'ofw-delete',
   title: 'Delete the old game data',
   render() {
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '2. Delete the old game data'),
+      h('h2', {}, '7. Delete the old game data'),
       h('ol', { class: 'ak-list' },
         h('li', {}, 'On the PS3 XMB, go to ', h('strong', {}, 'Game'), ' -> ', h('strong', {}, 'Game Data Utility'), '.'),
         h('li', {}, 'Highlight the item labeled ', h('strong', {}, '"Batman: Arkham Origins"'), ' (about 70 MB).'),
         h('li', {}, 'Press ', h('strong', {}, 'Triangle'), ' -> ', h('strong', {}, 'Delete'), ', then confirm.'),
       ),
       h('p', {}, 'This removes the old title update so the patched one can be restored cleanly. Save files and the installed game are not affected.'),
-      h('p', { class: 'ak-note' }, 'If there are several Arkham Origins entries, delete the one under Game Data Utility, not the one under Game.'),
+      h('p', { class: 'ak-note' }, 'If there are several Arkham Origins entries, make sure to only delete the one that is about 70 MB in size.'),
     );
   },
 };
@@ -176,7 +843,7 @@ const ofwBackup = {
   title: 'Back up the PS3',
   render() {
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '3. Back up your PS3'),
+      h('h2', {}, '8. Back up your PS3'),
       h('ol', { class: 'ak-list' },
         h('li', {}, 'Go to ', h('strong', {}, 'Settings'), ' -> ', h('strong', {}, 'System Settings'), ' -> ', h('strong', {}, 'Backup Utility'), '.'),
         h('li', {}, 'Select ', h('strong', {}, '"Back Up"'), ' -> ', h('strong', {}, '"USB Device"'), '.'),
@@ -198,7 +865,7 @@ const selectStep = {
 
     if (!state.isolated) {
       return h('div', { class: 'ak-page' },
-        h('h2', {}, '4. Select your backup on this computer'),
+        h('h2', {}, '9. Select your backup on this computer'),
         h('div', { class: 'ak-status ak-status-error' },
           h('strong', {}, 'This browser cannot run the backup editor'),
           h('p', {}, 'The WebAssembly backup writer needs SharedArrayBuffer, which this browser does not expose here. Use Chrome, Edge, Firefox or Safari on a desktop, or use the CFW/HEN flow, which does not touch the backup.'),
@@ -225,7 +892,7 @@ const selectStep = {
       controls.push(h('p', { class: 'ak-note' }, 'Recommended on Chrome/Edge: the patched files are written straight to the USB drive.'));
     } else if (!state.mobile) {
       controls.push(h('label', { class: 'ak-button ak-button-file' },
-        state.backupBusy ? 'Reading the backup…' : 'Select backup folder',
+        state.backupBusy ? 'Reading the backup...' : 'Select backup folder',
         h('input', {
           type: 'file', multiple: true, webkitdirectory: '', directory: '',
           disabled: state.backupBusy,
@@ -235,7 +902,7 @@ const selectStep = {
       controls.push(h('p', { class: 'ak-note' }, 'This browser cannot write to the USB drive, so the patched files will be downloaded for you to copy across.'));
     } else {
       controls.push(h('label', { class: 'ak-button ak-button-file' },
-        state.backupBusy ? 'Reading the backup…' : 'Select backup files',
+        state.backupBusy ? 'Reading the backup...' : 'Select backup files',
         h('input', {
           type: 'file', multiple: true, accept: '.dat,application/octet-stream',
           disabled: state.backupBusy,
@@ -259,7 +926,7 @@ const selectStep = {
       : null;
 
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '4. Select your backup on this computer'),
+      h('h2', {}, '9. Select your backup on this computer'),
       h('p', {}, 'Open the USB drive in your file manager. The backup is the folder that contains ', h('code', {}, 'archive.dat'), ' - usually ', h('code', {}, 'PS3/EXPORT/<timestamp>'), '.'),
       h('div', { class: 'ak-controls' }, controls),
       error,
@@ -309,14 +976,14 @@ async function loadDirectoryBackup(dirHandle, { kind = 'folder' } = {}) {
   state.backupError = null;
   state.backup = null;
   wizard.refresh();
-  if (state.importLine) state.importLine.textContent = 'Reading the backup index…';
+  if (state.importLine) state.importLine.textContent = 'Reading the backup index...';
   try {
     const instance = await getEngine();
     const backup = await readBackup({
       engine: instance,
       dirHandle,
       onProgress: text => {
-        if (state.importLine) state.importLine.textContent = `${text}…`;
+        if (state.importLine) state.importLine.textContent = `${text}...`;
       },
     });
     state.backup = { ...backup, dirHandle, name: dirHandle.name, kind };
@@ -349,7 +1016,7 @@ async function importFileSelection(fileList) {
     return;
   }
   state.backupBusy = true;
-  state.importLine = h('p', { class: 'ak-busy' }, 'Checking browser storage…');
+  state.importLine = h('p', { class: 'ak-busy' }, 'Checking browser storage...');
   wizard.refresh();
   try {
     if (!navigator.storage?.getDirectory) {
@@ -367,7 +1034,7 @@ async function importFileSelection(fileList) {
     state.importLine = line;
     for (const file of wanted) {
       const name = basename(file.webkitRelativePath || file.name);
-      line.textContent = `Copying ${name} into browser storage…`;
+      line.textContent = `Copying ${name} into browser storage...`;
       const handle = await dirHandle.getFileHandle(name, { create: true });
       const writable = await handle.createWritable();
       try {
@@ -376,7 +1043,7 @@ async function importFileSelection(fileList) {
           const buffer = await file.slice(offset, end).arrayBuffer();
           await writable.write(buffer);
           done += buffer.byteLength;
-          line.textContent = `Copying ${name} into browser storage… ${formatBytes(done)} of ${formatBytes(total)}`;
+          line.textContent = `Copying ${name} into browser storage... ${formatBytes(done)} of ${formatBytes(total)}`;
         }
       } finally {
         await writable.close();
@@ -875,7 +1542,7 @@ const ofwRestore = {
   title: 'Restore the backup',
   render() {
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '5. Restore the backup'),
+      h('h2', {}, '10. Restore the backup'),
       h('ol', { class: 'ak-list' },
         h('li', {}, 'Safely eject the USB drive from this computer, then plug it back into the PS3.'),
         h('li', {}, 'On the PS3, go to ', h('strong', {}, 'Settings'), ' -> ', h('strong', {}, 'System Settings'), ' -> ', h('strong', {}, 'Backup Utility'), '.'),
@@ -893,7 +1560,7 @@ const ofwSafeMode = {
   title: 'Enter Safe Mode',
   render() {
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '6. Enter Safe Mode'),
+      h('h2', {}, '11. Enter Safe Mode'),
       h('p', {}, 'After the restore, the PS3 needs to rebuild its database. Start by turning the console off and waiting until the red standby light is on.'),
       h('ol', { class: 'ak-list' },
         h('li', {}, 'Wait until the red standby light is on.'),
@@ -914,7 +1581,7 @@ const ofwRebuild = {
   title: 'Rebuild the database',
   render() {
     return h('div', { class: 'ak-page' },
-      h('h2', {}, '7. Rebuild the database'),
+      h('h2', {}, '12. Rebuild the database'),
       h('ol', { class: 'ak-list' },
         h('li', {}, 'Plug the PS3 controller into the console with a USB cable (wireless controllers may not work in Safe Mode).'),
         h('li', {}, 'Press the ', h('strong', {}, 'PS button'), '.'),
@@ -1012,13 +1679,57 @@ function finishPage(kind) {
 
 /* ------------------------------------------------------------------- flow */
 
+function linuxFormatSteps() {
+  const steps = [ofwLinuxKnow];
+  if (state.pmUsed === null) return steps;
+  if (state.pmUsed) {
+    steps.push(ofwLinuxManager);
+    if (state.linuxManager) steps.push(ofwLinuxGuide);
+    return steps;
+  }
+  for (const probe of [
+    { id: 'disks', step: ofwLinuxDisks },
+    { id: 'partition', step: ofwLinuxPartition },
+    { id: 'gparted', step: ofwLinuxGparted },
+  ]) {
+    steps.push(probe.step);
+    const answer = state.linuxProbes[probe.id];
+    if (answer === true) {
+      steps.push(ofwLinuxGuide);
+      return steps;
+    }
+    if (answer !== false) return steps;
+  }
+  steps.push(ofwLinuxDistro);
+  if (!state.linuxDistro) return steps;
+  steps.push(ofwLinuxInstall, ofwLinuxManager);
+  if (state.linuxManager) steps.push(ofwLinuxGuide);
+  return steps;
+}
+
+function formatSteps() {
+  if (state.formatKnown !== false) return [];
+  if (state.os === 'windows') {
+    return state.rufusUsed === null ? [ofwWindowsKnow] : [ofwWindowsKnow, ofwWindowsGuide];
+  }
+  if (state.os === 'macos') {
+    return state.pmUsed === null ? [ofwMacKnow] : [ofwMacKnow, ofwMacGuide];
+  }
+  if (state.os === 'linux') return linuxFormatSteps();
+  return [];
+}
+
 function buildFlow() {
   if (!state.mode) return [firmwareStep];
   if (state.mode === 'cfw') {
     return [firmwareStep, cfwIntro, regionStep, patchStep, cfwInstall, cfwFinish];
   }
   return [
-    firmwareStep, ofwUsb, ofwDelete, ofwBackup, selectStep, regionStep, patchStep,
+    firmwareStep,
+    ofwDrive, ofwSize, ofwOs, ofwFormat,
+    ...formatSteps(),
+    ofwPlugCheck,
+    ofwDelete, ofwBackup, selectStep, regionStep, patchStep,
     ofwResult, ofwRestore, ofwSafeMode, ofwRebuild,
     {
       id: 'ofw-finish',
@@ -1028,30 +1739,66 @@ function buildFlow() {
   ];
 }
 
-/* -------------------------------------------------------------- mobile note */
+/* --------------------------------------------------------- browser notices */
 
-function showMobileNotice() {
-  if (!state.mobile || state.mobileAcknowledged) return;
+function openNotice({ title, paragraphs, note, buttonLabel, onClose }) {
   const overlay = h('div', { class: 'ak-modal-backdrop', role: 'dialog', 'aria-modal': 'true' },
     h('div', { class: 'ak-modal' },
-      h('h2', {}, 'Use a computer instead'),
-      h('p', {}, 'This patcher reads and rewrites a PS3 Backup Utility archive. A desktop or laptop is strongly recommended: mobile browsers cannot select a folder, cannot write to the USB drive, and may run out of storage while the patch is prepared.'),
-      h('p', { class: 'ak-note' }, 'You can still continue on this device. The CFW/HEN zip works; the OFW backup path will download the patched files instead of writing them.'),
+      h('h2', {}, title),
+      paragraphs.map(text => h('p', {}, text)),
+      note ? h('p', { class: 'ak-note' }, note) : null,
       h('div', { class: 'ak-modal-actions' },
         h('button', {
           type: 'button',
           class: 'ak-button',
           onclick: () => {
-            state.mobileAcknowledged = true;
             overlay.remove();
             document.body.classList.remove('ak-modal-open');
+            onClose?.();
           },
-        }, 'I understand, continue anyway'),
+        }, buttonLabel),
       ),
     ),
   );
   document.body.classList.add('ak-modal-open');
   document.body.append(overlay);
+}
+
+function isChromiumBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/Firefox\/|FxiOS/.test(ua)) return false;
+  return /Chrome\/|Chromium\/|CriOS|Edg\//.test(ua);
+}
+
+function showBrowserNotice() {
+  if (state.browserAcknowledged) return;
+  openNotice({
+    title: 'Use Chrome or Edge for this patcher',
+    paragraphs: [
+      'This page rewrites PS3 backup archives with WebAssembly and needs specific browser features. It is only tested in Chrome, Edge and other Chromium-based browsers such as Opera or Brave.',
+      'Firefox and Safari may not be able to select the backup folder or write to the USB drive, and the patch can fail part way through. The CFW/HEN zip and the OFW download usually still work.',
+    ],
+    note: 'You can continue anyway. If something goes wrong, reopen this page in Chrome or Edge.',
+    buttonLabel: 'I understand, continue anyway',
+    onClose: () => {
+      state.browserAcknowledged = true;
+    },
+  });
+}
+
+function showMobileNotice() {
+  if (!state.mobile || state.mobileAcknowledged) return;
+  openNotice({
+    title: 'Use a computer instead',
+    paragraphs: [
+      'This patcher reads and rewrites a PS3 Backup Utility archive. A desktop or laptop is strongly recommended: mobile browsers cannot select a folder, cannot write to the USB drive, and may run out of storage while the patch is prepared.',
+    ],
+    note: 'You can still continue on this device. The CFW/HEN zip works; the OFW backup path will download the patched files instead of writing them.',
+    buttonLabel: 'I understand, continue anyway',
+    onClose: () => {
+      state.mobileAcknowledged = true;
+    },
+  });
 }
 
 /* ------------------------------------------------------------------- boot */
@@ -1077,7 +1824,8 @@ async function boot() {
   root.replaceChildren();
   wizard = new Wizard(root, { canLeave: () => !state.patchRunning });
   wizard.setSteps(buildFlow());
-  showMobileNotice();
+  if (!state.mobile && !state.browserAcknowledged && !isChromiumBrowser()) showBrowserNotice();
+  else showMobileNotice();
 
   if (!state.isolated) {
     console.info('Cross-origin isolation is unavailable; the OFW backup path will be disabled.');

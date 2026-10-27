@@ -132,7 +132,7 @@ export class TaskProgress {
     this.finished = false;
 
     this.bar = h('div', { class: 'ak-bar' }, h('div', { class: 'ak-bar-fill' }));
-    this.status = h('p', { class: 'ak-progress-status' }, 'Preparing…');
+    this.status = h('p', { class: 'ak-progress-status' }, 'Preparing...');
     this.detail = h('p', { class: 'ak-progress-detail' }, '');
     this.eta = h('span', { class: 'ak-progress-eta' }, 'ETA -');
     this.elapsed = h('span', { class: 'ak-progress-elapsed' }, 'Elapsed 0:00');
@@ -163,7 +163,7 @@ export class TaskProgress {
       this.cancelButton.hidden = false;
       this.cancelButton.onclick = () => {
         this.cancelButton.disabled = true;
-        this.cancelButton.textContent = 'Cancelling…';
+        this.cancelButton.textContent = 'Cancelling...';
         onCancel?.();
       };
     } else {
@@ -322,7 +322,9 @@ export class Wizard {
     this.stepLabel.textContent = step ? `Step ${this.index + 1} of ${this.steps.length}` : '';
     const canLeave = this.canLeave();
     this.back.disabled = this.index === 0 || !canLeave;
-    const nextLabel = step?.nextLabel?.(this) ?? 'Next';
+    // A step that defines nextLabel() can hide the button by returning null,
+    // which is how the question pages force an answer.
+    const nextLabel = step?.nextLabel ? step.nextLabel(this) : 'Next';
     this.next.textContent = nextLabel ?? 'Next';
     this.next.hidden = !nextLabel;
     this.next.disabled = Boolean(step?.canNext && !step.canNext());

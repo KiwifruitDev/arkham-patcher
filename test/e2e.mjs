@@ -34,7 +34,7 @@ const PAGE = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/arkhamrevived/ps3-tutorial/app/ui.css">
 </head><body>
-<div id="arkham-patcher"><p class="ak-busy">Loading the patcher…</p></div>
+<div id="arkham-patcher"><p class="ak-busy">Loading the patcher...</p></div>
 <script type="module" src="/arkhamrevived/ps3-tutorial/app/app.js"></script>
 </body></html>`;
 
@@ -45,6 +45,7 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.wasm': 'application/wasm',
   '.pkg': 'application/octet-stream',
+  '.png': 'image/png',
   '.json': 'application/json',
 };
 
@@ -129,6 +130,23 @@ async function nextPage(page, heading) {
   if (heading) await page.locator('.ak-page h2', { hasText: heading }).waitFor({ timeout: 30000 });
 }
 
+async function choose(page, text, heading) {
+  await page.locator('.ak-choice', { hasText: text }).click();
+  if (heading) await page.locator('.ak-page h2', { hasText: heading }).waitFor({ timeout: 30000 });
+}
+
+// The shortest route through the USB drive pages: a USB flash drive with
+// 32-128 GB free that is already FAT32 on MBR.
+async function completeDriveSetup(page, { os = 'Windows' } = {}) {
+  await page.locator('.ak-page h2', { hasText: 'Choose a USB drive' }).waitFor();
+  await choose(page, 'USB flash drive', 'Check the drive has enough space');
+  await choose(page, '32 GB to 128 GB');
+  await nextPage(page, 'Which computer are you using?');
+  await choose(page, os, 'Is the drive already FAT32');
+  await choose(page, 'Yes, it is FAT32 and MBR', 'Check the PS3 can see the drive');
+  await choose(page, 'Yes, Backup Utility lists the drive', 'Delete the old game data');
+}
+
 function bind(Module) {
   const wrap = (name, ret, args) => Module.cwrap(name, ret, args);
   return {
@@ -209,8 +227,7 @@ async function unzip(file, dir) {
 
 async function testOfw(page, baseUrl, fixture) {
   await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
-  await page.locator('.ak-page h2', { hasText: 'Prepare a USB drive' }).waitFor();
-  await nextPage(page, 'Delete the old game data');
+  await completeDriveSetup(page);
   await nextPage(page, 'Back up your PS3');
   await nextPage(page, 'Select your backup on this computer');
 
@@ -312,7 +329,7 @@ async function testFolderInstall(browser, baseUrl, fixture) {
   }, files);
 
   await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
-  await nextPage(page, 'Delete the old game data');
+  await completeDriveSetup(page);
   await nextPage(page, 'Back up your PS3');
   await nextPage(page, 'Select your backup on this computer');
   await page.locator('button', { hasText: 'Select backup folder' }).click();
@@ -369,8 +386,124 @@ async function testFolderInstall(browser, baseUrl, fixture) {
   await context.close();
 }
 
-async function testCfw(browser, baseUrl) {
-  const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1200, height: 900 } });
+async function testRufusBranch(browser, baseUrl) {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const { page, errors } = await bootPage(context, baseUrl);
+  await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
+
+  // A card reader warns that the PS3 may not accept it, but the user can continue.
+  await choose(page, 'SD card reader');
+  await page.locator('.ak-status-error', { hasText: 'may not accept this device' }).waitFor();
+  await nextPage(page, 'Check the drive has enough space');
+
+  // A small drive warns that the backup will not fit.
+  await choose(page, 'Under 32 GB');
+  await page.locator('.ak-status-error', { hasText: 'probably too small' }).waitFor();
+  await nextPage(page, 'Which computer are you using?');
+
+  await choose(page, 'Windows', 'Is the drive already FAT32');
+  await choose(page, 'No, or not sure', 'Format the drive with Rufus');
+  await page.locator('.ak-choice', { hasText: 'I want the full walkthrough' }).click();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('img.ak-shot');
+    return Boolean(image) && image.complete && image.naturalWidth > 0;
+  }, null, { timeout: 15000 });
+  const rufus = await page.locator('.ak-page').innerText();
+  assert.match(rufus, /Large FAT32/);
+  assert.match(rufus, /x64, x86,? or ARM64/);
+  assert.match(rufus, /Confirm all four/i);
+  await nextPage(page, 'Check the PS3 can see the drive');
+
+  // "Not detected" explains what to check and still lets the user continue.
+  await choose(page, 'No, nothing shows up');
+  await page.locator('.ak-status-error', { hasText: 'cannot read the drive yet' }).waitFor();
+  assert.match(await page.locator('.ak-status-error').innerText(), /SD card readers|Card readers/);
+  await nextPage(page, 'Delete the old game data');
+  assert.deepEqual(errors, [], 'no page errors');
+  await context.close();
+}
+
+async function testLinuxBranch(browser, baseUrl) {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const { page, errors } = await bootPage(context, baseUrl);
+  await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
+  await page.locator('.ak-page h2', { hasText: 'Choose a USB drive' }).waitFor();
+  await choose(page, 'SATA to USB adapter');
+  await page.locator('.ak-status-error', { hasText: 'may not accept this device' }).waitFor();
+  await nextPage(page, 'Check the drive has enough space');
+  await choose(page, '512 GB or more');
+  await nextPage(page, 'Which computer are you using?');
+  await choose(page, 'Linux', 'Is the drive already FAT32');
+  await choose(page, 'No, or not sure', 'Format the drive as FAT32');
+  await choose(page, 'No, help me find one', 'Find a partition manager');
+
+  // Each "is it installed?" question falls through to the next tool.
+  await page.locator('.ak-page p', { hasText: 'search for Disks' }).waitFor();
+  await choose(page, 'No, it is not installed');
+  await page.locator('.ak-page p', { hasText: 'search for Partition' }).waitFor();
+  assert.match(await page.locator('.ak-page').innerText(), /KDE Partition Manager/);
+  await choose(page, 'No, it is not installed');
+  await page.locator('.ak-page p', { hasText: 'search for GParted' }).waitFor();
+  await choose(page, 'No, it is not installed', 'No partition manager found');
+
+  await choose(page, 'Ubuntu', 'Install GParted');
+  assert.match(await page.locator('.ak-command').innerText(), /sudo apt install gparted/);
+  await nextPage(page, 'Select which partition manager');
+  await choose(page, 'GParted', 'Format the drive with GParted');
+  assert.match(await page.locator('.ak-page').innerText(), /Apply All Operations/);
+  await nextPage(page, 'Check the PS3 can see the drive');
+  await choose(page, 'Yes, Backup Utility lists the drive', 'Delete the old game data');
+  assert.deepEqual(errors, [], 'no page errors');
+  await context.close();
+}
+
+async function testMacBranch(browser, baseUrl) {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const { page, errors } = await bootPage(context, baseUrl);
+  await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
+  await page.locator('.ak-page h2', { hasText: 'Choose a USB drive' }).waitFor();
+  await choose(page, 'USB flash drive', 'Check the drive has enough space');
+  await choose(page, '128 GB to 512 GB');
+  await nextPage(page, 'Which computer are you using?');
+  await choose(page, 'macOS', 'Is the drive already FAT32');
+  await choose(page, 'No, or not sure', 'Format the drive with Disk Utility');
+
+  // Knowing Disk Utility gives the short list; the walkthrough adds the hints.
+  await page.locator('.ak-choice', { hasText: 'Yes, I have' }).click();
+  await page.locator('.ak-page ol').waitFor();
+  let text = await page.locator('.ak-page').innerText();
+  assert.match(text, /MS-DOS \(FAT\)/);
+  assert.match(text, /Master Boot Record/);
+  assert.doesNotMatch(text, /If Scheme is not shown/);
+
+  await page.locator('.ak-wizard-nav button').nth(0).click();
+  await page.locator('.ak-choice', { hasText: 'walk me through it' }).click();
+  await page.locator('.ak-status', { hasText: 'If Scheme is not shown' }).waitFor();
+  text = await page.locator('.ak-page').innerText();
+  assert.match(text, /Show All Devices/);
+  await nextPage(page, 'Check the PS3 can see the drive');
+  await choose(page, 'Yes, Backup Utility lists the drive', 'Delete the old game data');
+  assert.deepEqual(errors, [], 'no page errors');
+  await context.close();
+}
+
+async function testBrowserNotice(browser, baseUrl) {
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
+    viewport: { width: 1200, height: 900 },
+  });
+  const { page, errors } = await bootPage(context, baseUrl);
+  const modal = page.locator('.ak-modal');
+  await modal.waitFor({ timeout: 15000 });
+  assert.match(await modal.innerText(), /Chrome or Edge/);
+  await page.locator('button', { hasText: 'I understand, continue anyway' }).click();
+  assert.equal(await page.locator('.ak-modal').count(), 0, 'modal is dismissed');
+  assert.equal(await page.locator('.ak-choice').count(), 2, 'the patcher is usable after the warning');
+  assert.deepEqual(errors, [], 'no page errors');
+  await context.close();
+}
+
+async function testCfw(browser, baseUrl) {  const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1200, height: 900 } });
   const { page, errors } = await bootPage(context, baseUrl);
   assert.deepEqual(errors, [], 'no page errors');
   await page.locator('.ak-choice', { hasText: 'CFW or HEN' }).click();
@@ -402,7 +535,7 @@ async function testMobile(browser, baseUrl) {
   await page.locator('button', { hasText: 'I understand, continue anyway' }).click();
   assert.equal(await page.locator('.ak-modal').count(), 0, 'modal is dismissed');
   await page.locator('.ak-choice', { hasText: 'OFW (original firmware)' }).click();
-  await nextPage(page, 'Delete the old game data');
+  await completeDriveSetup(page);
   await nextPage(page, 'Back up your PS3');
   await nextPage(page, 'Select your backup on this computer');
   assert.equal(await page.locator('button', { hasText: 'Select backup folder' }).count(), 0, 'no folder picker on mobile');
@@ -433,6 +566,14 @@ async function main() {
     console.log('ok   Chromium direct install');
     await testCfw(browser, baseUrl);
     console.log('ok   CFW zip path');
+    await testRufusBranch(browser, baseUrl);
+    console.log('ok   Windows/Rufus branch and drive warnings');
+    await testLinuxBranch(browser, baseUrl);
+    console.log('ok   Linux partition manager discovery');
+    await testMacBranch(browser, baseUrl);
+    console.log('ok   macOS Disk Utility branch');
+    await testBrowserNotice(browser, baseUrl);
+    console.log('ok   non-Chromium browser warning');
     await testMobile(browser, baseUrl);
     console.log('ok   mobile warning and file fallback');
   } finally {

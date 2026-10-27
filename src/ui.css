@@ -326,6 +326,35 @@
   margin: 8px 0;
 }
 
+/* Screenshots and commands in the drive-format guide */
+.ak-shot-link {
+  display: block;
+}
+
+.ak-shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 12px 0 6px;
+  border: 1px solid #34506f;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ak-command {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 14px;
+  color: #d8e6ff;
+  background: #07101c;
+  border: 1px solid #22344d;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  user-select: all;
+}
+
 /* Progress */
 .ak-progress {
   margin: 14px 0 6px;
