@@ -11,7 +11,7 @@ patched. Depending on the firmware answer:
 - **OFW (stock firmware)**: the update is merged into a PS3 Backup Utility
   archive (`archive.dat` + `archive_*.dat`) which the user restores on the PS3.
 - **CFW / HEN**: the patched `COALESCED_*.BIN` files are downloaded as a zip to
-  copy with multiMAN (mmCM); the backup is never touched.
+  copy with multiMAN (mmCM), the backup is never touched.
 
 There is no backend. The page is static and can be served by GitHub Pages.
 
@@ -53,7 +53,7 @@ from PARAM.SFO, and verifies that every COALESCED file contains
 3. **OFW**: read the backup index, unlink the index entries the update
    replaces (the bytes stay in place), append the patched files to the last
    chunk, and write a new `archive.dat` (`src/archive-patch.js`). Only the last
-   chunk and the new chunks are produced; no existing file is read. The
+   chunk and the new chunks are produced, no existing file is read. The
    archive index and chunk encryption come from the ps3xport WebAssembly core.
 4. **CFW/HEN**: zip the patched COALESCED files with a README.
 
@@ -67,7 +67,7 @@ against `public/arkhamrevived/ps3/COALESCED_INT.BIN`).
 USB/backup/restore/safe-mode/rebuild instructions for OFW, region/edition
 selection, the patch progress (status, bar, ETA, elapsed), and the download or
 in-place install result. Mobile devices get an "use a computer" notice with an
-"I understand" option; folder selection is hidden there.
+"I understand" option, folder selection is hidden there.
 
 ### Cross-origin isolation
 
@@ -85,7 +85,7 @@ npm run build
 ```
 
 This copies the modules and the ps3xport WebAssembly build into
-`kiwifruitdev.com/public/arkhamrevived/ps3-tutorial/app/` (build artifacts only;
+`kiwifruitdev.com/public/arkhamrevived/ps3-tutorial/app/` (build artifacts only,
 the source stays here) and writes `coi-sw.js` and `_headers` next to the page.
 Rebuild the WebAssembly core with `npm run build` in the repository root if
 `web/ps3xport.wasm` changes.
@@ -103,16 +103,16 @@ node test/site-smoke.mjs    # the built Astro page (needs `npm run build` in kiw
 are skipped if those files are missing. `test/e2e.mjs` starts a local static
 server with no COOP/COEP headers (like GitHub Pages), creates a synthetic
 backup with the ps3xport core, and drives the page with Playwright. It
-requires Chrome or Edge; Playwright is installed by the repository root's
-`npm install`.
+requires Chrome or a Chromium-based browser, Playwright is installed by
+the repository root's `npm install`.
 
 ## Credits and licences
 
-- `ps3xport` WebAssembly core: GPL-3.0-or-later (kakaroto); the web panel
-  drivers around it are MIT. Both come from [ps3xport-wasm](../README.md).
-- PKG reader ported from [PyKG](../PyKG): MIT, © 2026 Aphelion.
+- `ps3xport` WebAssembly core: GPL-3.0-or-later (kakaroto), the web panel
+  drivers around it are MIT. See [ps3xport-wasm](https://github.com/KiwifruitDev/ps3xport-wasm) & [ps3xport](https://github.com/kakaroto/ps3xport).
+- PKG reader ported from [PyKG](https://github.com/AphelionWasTaken/PyKG): MIT, (c) 2026 Aphelion.
 - Coalesced reader/writer ported from
-  [coalesced-inifier](../coalesced-inifier): GPL-3.0.
-- The page, wizard and patch logic: MIT, © 2026 KiwifruitDev. Because it
+  [coalesced-inifier](https://github.com/ripdajacker/coalesced-inifier): GPL-3.0.
+- The page, wizard and patch logic: MIT, (c) 2026 KiwifruitDev. Because it
   combines the GPL-3.0-or-later ps3xport core and coalesced-inifier code, the
   combined build is distributed under the GPL-3.0-or-later.
