@@ -1,0 +1,125 @@
+name: Deploy patcher
+
+# Builds the browser patcher and pushes the result to the kiwifruitdev.com
+# repository. The push to that repository's main branch runs its own
+# "Deploy to GitHub Pages" workflow, which publishes the site.
+#
+# Required secret: KIWI_SITE_TOKEN - a fine-grained personal access token with
+# "Contents: read and write" on KiwifruitDev/kiwifruitdev.com. The
+# GITHUB_TOKEN of this workflow cannot push to another repository.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-kiwifruitdev-com
+  cancel-in-progress: false
+
+env:
+  SITE_REPOSITORY: KiwifruitDev/kiwifruitdev.com
+
+jobs:
+  deploy:
+    name: Build and commit to kiwifruitdev.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Require the site deploy token
+        env:
+          TOKEN: ${{ secrets.KIWI_SITE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error title=Missing secret::Set KIWI_SITE_TOKEN to a token with contents write access on ${SITE_REPOSITORY}."
+            exit 1
+          fi
+
+      # build.mjs reads the WebAssembly core from the parent directory and
+      # writes into a kiwifruitdev.com sibling, and the tests import from the
+      # same two locations. work/ reproduces that layout, so both run unmodified.
+      - name: Check out the ps3xport WebAssembly core
+        uses: actions/checkout@v4
+        with:
+          repository: KiwifruitDev/ps3xport-wasm
+          path: work
+
+      - name: Check out the patcher
+        uses: actions/checkout@v4
+        with:
+          path: work/arkham-patcher
+
+      - name: Check out the site repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SITE_REPOSITORY }}
+          token: ${{ secrets.KIWI_SITE_TOKEN }}
+          path: work/kiwifruitdev.com
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The artifacts committed to ps3xport-wasm are not reused: rebuilding the
+      # core guarantees the site ships a core compiled from the current sources.
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Build the WebAssembly core
+        working-directory: work
+        run: npm run build
+
+      - name: Test the patcher
+        working-directory: work/arkham-patcher
+        run: node --test test/*.test.mjs
+
+      - name: Build the patcher into the site
+        working-directory: work/arkham-patcher
+        run: node build.mjs
+
+      - name: Verify the generated files
+        working-directory: work/kiwifruitdev.com
+        run: |
+          test -s public/arkhamrevived/ps3-tutorial/app/app.js
+          test -s public/arkhamrevived/ps3-tutorial/app/worker.js
+          test -s public/arkhamrevived/ps3-tutorial/app/ps3xport.wasm
+          test -s public/arkhamrevived/ps3-tutorial/coi-sw.js
+          test -s public/_headers
+
+      - name: Commit and push to the site repository
+        working-directory: work/kiwifruitdev.com
+        env:
+          PATCHER_SHA: ${{ github.sha }}
+        run: |
+          git add -A public/arkhamrevived/ps3-tutorial public/_headers
+
+          if git diff --cached --quiet; then
+            echo "The site already contains this build; nothing to commit."
+            exit 0
+          fi
+
+          core_sha="$(git -C .. rev-parse --short HEAD)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit \
+            -m "Publish Arkham: Revived PS3 patcher" \
+            -m "Built from KiwifruitDev/arkham-patcher@${PATCHER_SHA} and KiwifruitDev/ps3xport-wasm@${core_sha}."
+
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Pushed the new build; GitHub Pages will publish it."
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; rebasing on the latest main."
+            sleep 10
+            git pull --rebase --autostash origin main
+          done
+
+          echo "::error::Could not push the new build to ${SITE_REPOSITORY}."
+          exit 1

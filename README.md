@@ -122,6 +122,25 @@ the source stays here) and writes `coi-sw.js` and `_headers` next to the page.
 Rebuild the WebAssembly core with `npm run build` in the repository root if
 `web/ps3xport.wasm` changes.
 
+## Deploy
+
+`.github/workflows/deploy.yml` publishes the patcher. On every push to `main`
+it checks out this repository, [ps3xport-wasm](https://github.com/KiwifruitDev/ps3xport-wasm)
+and [kiwifruitdev.com](https://github.com/KiwifruitDev/kiwifruitdev.com) side
+by side, rebuilds the WebAssembly core, runs the Node tests, runs
+`node build.mjs`, and commits the result to `kiwifruitdev.com`. That commit
+then triggers the site repository's own workflow, which publishes it with
+GitHub Pages.
+
+The job needs a `KIWI_SITE_TOKEN` secret: a fine-grained personal access token
+with `Contents: read and write` on `kiwifruitdev.com`. The default
+`GITHUB_TOKEN` cannot push to another repository.
+
+The core is rebuilt from source rather than copied from the artifacts committed
+to `ps3xport-wasm`, so the site never ships a stale `ps3xport.wasm`. A push to
+`ps3xport-wasm` alone does not redeploy the patcher; run this workflow manually
+(or wait for the next push here) to pick up a new core.
+
 ## Tests
 
 ```powershell
