@@ -104,6 +104,11 @@ GitHub Pages cannot send custom headers, so `src/coi-sw.js` is registered at
 page once. `build.mjs` also writes a `_headers` file for hosts that support
 one. The CFW/HEN flow works even without isolation.
 
+Isolation also means every cross-origin asset on the page has to be a CORS
+request; a widget that injects plain `<img>`/`<script>` tags will be blocked.
+The Ko-fi button is therefore rendered inline in `ps3-tutorial.astro` with
+`crossorigin="anonymous"` on its icon instead of using the hosted widget.
+
 ## Build
 
 ```powershell

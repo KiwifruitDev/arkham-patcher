@@ -78,6 +78,18 @@ try {
   if (!(await page.locator('.ak-wizard').count())) throw new Error('wizard did not render');
   if (!(await page.locator('.ak-choice').count())) throw new Error('firmware choices are missing');
   if (!(await page.locator('header.header').count())) throw new Error('site header is missing');
+
+  // The page is cross-origin isolated, so any cross-origin asset on it has to be
+  // a CORS request; the Ko-fi icon is the one external image that is not bundled.
+  if (!(await page.locator('a.kofi-button').count())) throw new Error('the Ko-fi button is missing');
+  await page.locator('a.kofi-button img').scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => {
+    const image = document.querySelector('a.kofi-button img');
+    return Boolean(image) && image.complete && image.naturalWidth > 0;
+  }, null, { timeout: 15000 }).catch(() => {
+    throw new Error('the Ko-fi icon did not load, check its crossorigin attribute');
+  });
+
   if (errors.length) throw new Error(`page errors: ${errors.join(' | ')}`);
   console.log('ok   built Astro page bootstraps the patcher');
 } finally {
