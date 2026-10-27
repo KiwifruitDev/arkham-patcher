@@ -61,7 +61,7 @@ class NodeEngine {
       this.copyBufferSize = bytes.length;
     }
     this.Module.HEAPU8.set(bytes, this.copyBuffer);
-    check(this.api.chunkWrite(this.copyBuffer, bytes.length));
+    check(this.api, this.api.chunkWrite(this.copyBuffer, bytes.length));
   }
 
   async rpc(command, args = {}) {
@@ -77,24 +77,24 @@ class NodeEngine {
   async run(command, args = {}) {
     const api = this.api;
     switch (command) {
-      case 'chunkBegin': check(api.chunkBegin(args.path, args.id, args.index, args.archiveType, args.cap)); return {};
+      case 'chunkBegin': check(api, api.chunkBegin(args.path, args.id, args.index, args.archiveType, args.cap)); return {};
       case 'chunkWrite': this.chunkWrite(args.data instanceof Uint8Array ? args.data : new Uint8Array(args.data)); return { n: args.data.byteLength };
-      case 'chunkCopy': check(api.chunkCopy(args.source, args.offset, args.length)); return {};
-      case 'chunkFinish': { const size = api.chunkSize(); check(api.chunkFinish()); return { size }; }
+      case 'chunkCopy': check(api, api.chunkCopy(args.source, args.offset, args.length)); return {};
+      case 'chunkFinish': { const size = api.chunkSize(); check(api, api.chunkFinish()); return { size }; }
       case 'chunkAbort': api.chunkAbort(); return {};
       case 'indexBegin':
-        if (args.create !== null && args.create !== undefined) check(api.indexNew(args.create));
-        else check(api.indexOpen(args.open));
+        if (args.create !== null && args.create !== undefined) check(api, api.indexNew(args.create));
+        else check(api, api.indexOpen(args.open));
         return { id: api.indexId() };
       case 'indexApply': {
-        for (const item of args.remove) check(api.indexRemoveFile(item));
-        for (const item of args.rename) check(api.indexRenameFile(item.from, item.to));
-        for (const item of args.update) check(api.indexUpdateFile(item.path, item.size, item.mode ?? 0, item.mtime ?? 0, item.flags ?? 0));
-        for (const item of args.add) check(api.indexAddFile(item.path, item.size, item.mode ?? 0, item.mtime ?? 0, item.flags ?? 0));
-        check(api.indexClearDirs());
-        for (const dir of args.dirs ?? []) check(api.indexAddDir(dir.path, dir.mode ?? 0, dir.mtime ?? 0, dir.flags ?? 0));
+        for (const item of args.remove) check(api, api.indexRemoveFile(item));
+        for (const item of args.rename) check(api, api.indexRenameFile(item.from, item.to));
+        for (const item of args.update) check(api, api.indexUpdateFile(item.path, item.size, item.mode ?? 0, item.mtime ?? 0, item.flags ?? 0));
+        for (const item of args.add) check(api, api.indexAddFile(item.path, item.size, item.mode ?? 0, item.mtime ?? 0, item.flags ?? 0));
+        check(api, api.indexClearDirs());
+        for (const dir of args.dirs ?? []) check(api, api.indexAddDir(dir.path, dir.mode ?? 0, dir.mtime ?? 0, dir.flags ?? 0));
         if (args.archive2Size !== null && args.archive2Size !== undefined) api.indexSetArchive2Size(args.archive2Size);
-        check(api.indexSave(args.saveTo));
+        check(api, api.indexSave(args.saveTo));
         return {};
       }
       case 'indexClose': api.indexClose(); return {};
@@ -146,12 +146,12 @@ function bind(Module) {
   };
 }
 
-function check(code) {
-  if (code !== 0) throw new Error('wasm call failed');
+function check(api, code) {
+  if (code !== 0) throw new Error(`wasm call failed: ${api.lastError()}`);
 }
 
 function readIndex(api) {
-  check(api.indexOpen('/px/usb/archive.dat'));
+  check(api, api.indexOpen('/px/usb/archive.dat'));
   const files = [];
   for (let index = 0; index < api.indexFileCount(); index++) {
     files.push({
@@ -197,8 +197,8 @@ test('plans and writes the title update into a backup archive', { timeout: 12000
   mountHostRoots(Module, host, ['content', 'out', 'scratch']);
 
   const engine = new NodeEngine(Module, host);
-  check(engine.api.init());
-  check(engine.api.createBackup('/px/out/20261026000000', '/px/content', '-'));
+  check(engine.api, engine.api.init());
+  check(engine.api, engine.api.createBackup('/px/out/20261026000000', '/px/content', '-'));
 
   engine.setRoot('usb', out);
   const before = readIndex(engine.api);
@@ -246,14 +246,14 @@ test('plans and writes the title update into a backup archive', { timeout: 12000
   for (let index = 0; ; index++) {
     const file = path.join(out, `archive_${String(index).padStart(2, '0')}.dat`);
     if (!fs.existsSync(file)) break;
-    check(engine.api.dataRead(`/px/usb/archive_${String(index).padStart(2, '0')}.dat`));
+    check(engine.api, engine.api.dataRead(`/px/usb/archive_${String(index).padStart(2, '0')}.dat`));
   }
 
-  check(engine.api.extractFile('/px/usb', 'archive', '/dev_hdd0/game/BLUS31147/USRDIR/NEWFILE.BIN', '/px/scratch/new.bin'));
+  check(engine.api, engine.api.extractFile('/px/usb', 'archive', '/dev_hdd0/game/BLUS31147/USRDIR/NEWFILE.BIN', '/px/scratch/new.bin'));
   const extractedNew = fs.readFileSync(path.join(scratch, 'new.bin'));
   assert.deepEqual(Buffer.from(extractedNew), newEbootPatch);
 
-  check(engine.api.extractFile('/px/usb', 'archive', '/dev_hdd0/game/BLUS31147/USRDIR/EBOOT.BIN', '/px/scratch/eboot.bin'));
+  check(engine.api, engine.api.extractFile('/px/usb', 'archive', '/dev_hdd0/game/BLUS31147/USRDIR/EBOOT.BIN', '/px/scratch/eboot.bin'));
   const extractedOld = fs.readFileSync(path.join(scratch, 'eboot.bin'));
   assert.equal(crypto.createHash('sha256').update(extractedOld).digest('hex'), hashes.get('/dev_hdd0/game/BLUS31147/USRDIR/EBOOT.BIN'));
 
