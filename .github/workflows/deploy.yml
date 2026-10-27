@@ -67,9 +67,8 @@ jobs:
 
       # The artifacts committed to ps3xport-wasm are not reused: rebuilding the
       # core guarantees the site ships a core compiled from the current sources.
-      # The release is pinned on purpose. Development emsdk builds (what the
-      # action installs by default) compile a core that fails to write a backup
-      # with "sc_encrypt: Unknown key", which the patcher tests catch below.
+      # The release is pinned so the compiled core is reproducible, and the
+      # tests below prove it can still create a backup before anything ships.
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:

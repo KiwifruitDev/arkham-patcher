@@ -137,12 +137,11 @@ with `Contents: read and write` on `kiwifruitdev.com`. The default
 `GITHUB_TOKEN` cannot push to another repository.
 
 The core is rebuilt from source rather than copied from the artifacts committed
-to `ps3xport-wasm`, so the site never ships a stale `ps3xport.wasm`. The
-workflow pins the Emscripten 6.0.13 release: development emsdk builds compile a
-core that cannot create a backup (`sc_encrypt: Unknown key`), which the tests
-catch before anything is published. A push to `ps3xport-wasm` alone does not
-redeploy the patcher; run this workflow manually (or wait for the next push
-here) to pick up a new core.
+to `ps3xport-wasm`, so the site never ships a stale `ps3xport.wasm`, and the
+Node tests run before anything is pushed. Emscripten is pinned to the 6.0.13
+release so the compiled core is reproducible. A push to `ps3xport-wasm` alone
+does not redeploy the patcher; run this workflow manually (or wait for the next
+push here) to pick up a new core.
 
 ## Tests
 
