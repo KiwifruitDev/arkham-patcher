@@ -38,21 +38,36 @@ endpoint presents a certificate that is not valid for
 
 `node scripts/validate-pkgs.mjs` re-extracts all of them, checks the TITLE_ID
 from PARAM.SFO, and verifies that every COALESCED file contains
-`BmGame/Config/PS3-BmNetVars.ini`.
+`BmGame/Config/PS3-BmNetVars.ini` and `BmGame/Config/PS3-BmEngine.ini` with both
+edits applied. Regions ship different numbers of language files (Brazil has
+three, the others nine), so the checker and the patcher work from the COALESCED
+files each package actually contains.
 
 ## The patch
 
 1. Parse the PKG header, decrypt the AES-CTR item table and the payloads
    (`src/pkg.js`, ported from PyKG).
-2. Prepend the redirect section to every
+2. Edit the configs stored in every
    `USRDIR/MULTIPLAYER/PATCH/BMGAME/COOKEDPS3/COALESCED_*.BIN`
-   (`src/coalesced.js`, ported from coalesced-inifier):
+   (`src/coalesced.js`, ported from coalesced-inifier). The redirect section is
+   prepended to `BmGame/Config/PS3-BmNetVars.ini`:
 
    ```ini
    [Default__GDHttp GDHttp]
    TitleFileName = dummy.json
-   Settings      = (BaseURL="http://arkhamrevived.kiwifruitdev.com/")
+   Settings      = (BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")
    ```
+
+   and `BmGame/Config/PS3-BmEngine.ini` stops waiting for the startup movie:
+
+   ```ini
+   [FullScreenMovie]
+   bForceNoMovies = TRUE
+   ```
+
+   A COALESCED file that does not carry one of these INI files is patched where
+   it can be instead of failing, and the loop follows the COALESCED files the
+   package provides (the Brazil update has three, the US/Europe updates nine).
 
 3. **OFW**: read the backup index, unlink the index entries the update
    replaces (the bytes stay in place), append the patched files to the last

@@ -20,9 +20,19 @@ for (const region of REGIONS) {
   }
   const pkg = await extractPkg(await fs.openAsBlob(file));
   const bytes = pkg.files.reduce((sum, item) => sum + item.size, 0);
-  const coalesced = pkg.files.filter(item => /COOKEDPS3\/COALESCED_[A-Z]+\.BIN$/i.test(item.path));
+  // Regions ship different numbers of language files: the Brazil update has
+  // three, the US/Europe updates nine. Only patch what the package contains.
+  const coalesced = pkg.files.filter(item => /COOKEDPS3\/COALESCED_[A-Z0-9_]+\.BIN$/i.test(item.path));
   let patched = 0;
-  for (const item of coalesced) if ((await patchCoalescedBlob(item.blob)).changed) patched++;
+  const missing = [];
+  for (const item of coalesced) {
+    const result = await patchCoalescedBlob(item.blob);
+    if (result.redirect && result.movies) {
+      patched++;
+      continue;
+    }
+    missing.push(`${item.path.split('/').pop()}: ${[!result.redirect && 'PS3-BmNetVars.ini', !result.movies && 'PS3-BmEngine.ini'].filter(Boolean).join(', ')}`);
+  }
   const ok = pkg.titleId === region.titleId && coalesced.length > 0 && patched === coalesced.length;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${region.titleId} (${region.file}): ${pkg.appVer} ${JSON.stringify(pkg.title)} · ${pkg.files.length} files · ${(bytes / 1048576).toFixed(1)} MiB · ${coalesced.length} coalesced, ${patched} patched`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${region.titleId} (${region.file}): ${pkg.appVer} ${JSON.stringify(pkg.title)} · ${pkg.files.length} files · ${(bytes / 1048576).toFixed(1)} MiB · ${coalesced.length} coalesced, ${patched} patched${missing.length ? ` (missing ${missing.join('; ')})` : ''}`);
 }

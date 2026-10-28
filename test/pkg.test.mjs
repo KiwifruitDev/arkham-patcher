@@ -32,6 +32,26 @@ test('extracts the title update and patches every COALESCED file', { skip: !fs.e
 
   for (const file of coalesced) {
     const patched = await patchCoalescedBlob(file.blob);
-    assert.equal(patched.changed, true, `${file.path} contains PS3-BmNetVars.ini`);
+    assert.equal(patched.changed, true, `${file.path} was patched`);
+    assert.equal(patched.redirect, true, `${file.path} contains PS3-BmNetVars.ini`);
+    assert.equal(patched.movies, true, `${file.path} contains PS3-BmEngine.ini`);
+  }
+});
+
+// The Brazil builds only ship three language files, so nothing may assume the
+// nine COALESCED files of the US/Europe releases.
+const brazilFixture = `${pkgDir}UP1018-BLUS31207_00-BATMANORIGIPATCH-A0106-V0100-PE.pkg`;
+
+test('patches a region that ships fewer COALESCED files', { skip: !fs.existsSync(brazilFixture), timeout: 300000 }, async () => {
+  const pkg = await extractPkg(await fs.openAsBlob(brazilFixture));
+  assert.equal(pkg.titleId, 'BLUS31207');
+
+  const coalesced = pkg.files.filter(file => /COOKEDPS3\/COALESCED_[A-Z]+\.BIN$/i.test(file.path));
+  assert.equal(coalesced.length, 3, 'the Brazil update ships three COALESCED files');
+
+  for (const file of coalesced) {
+    const patched = await patchCoalescedBlob(file.blob);
+    assert.equal(patched.redirect, true, `${file.path} contains PS3-BmNetVars.ini`);
+    assert.equal(patched.movies, true, `${file.path} contains PS3-BmEngine.ini`);
   }
 });

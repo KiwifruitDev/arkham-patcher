@@ -198,7 +198,13 @@ function assertPatchedCoalesced(buffer, label) {
   const section = target.sections.find(item => item.name === 'Default__GDHttp GDHttp');
   assert.ok(section, `${label} has the GDHttp section`);
   assert.equal(section.values.find(item => item.key === 'TitleFileName')?.value, 'dummy.json');
-  assert.equal(section.values.find(item => item.key === 'Settings')?.value, '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")');
+  assert.equal(section.values.find(item => item.key === 'Settings')?.value, '(BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")');
+
+  const engine = parsed.files.find(file => /PS3-BmEngine\.ini$/i.test(file.name));
+  assert.ok(engine, `${label} contains PS3-BmEngine.ini`);
+  const movies = engine.sections.find(item => item.name === 'FullScreenMovie');
+  assert.ok(movies, `${label} has the FullScreenMovie section`);
+  assert.equal(movies.values.find(item => item.key === 'bForceNoMovies')?.value, 'TRUE', `${label} disables the startup movies`);
 }
 
 async function downloadAndSave(page, buttonText, target) {
@@ -523,6 +529,32 @@ async function testCfw(browser, baseUrl) {  const context = await browser.newCon
   await context.close();
 }
 
+// The Brazil update only ships three language files, so the page must not
+// expect the nine COALESCED files of the US/Europe releases.
+async function testCfwFewerCoalescedFiles(browser, baseUrl) {
+  const context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1200, height: 900 } });
+  const { page, errors } = await bootPage(context, baseUrl);
+  assert.deepEqual(errors, [], 'no page errors');
+  await page.locator('.ak-choice', { hasText: 'CFW or HEN' }).click();
+  await page.locator('.ak-page h2', { hasText: 'CFW or HEN: no backup needed' }).waitFor();
+  await nextPage(page, 'Choose your game version');
+  await page.locator('.ak-select').first().selectOption('Brazil');
+  await page.locator('.ak-status', { hasText: 'BLUS31207' }).waitFor();
+  await nextPage(page, 'Patch the COALESCED files');
+  await page.locator('button', { hasText: 'Download and patch' }).click();
+  await page.locator('.ak-status-ok', { hasText: 'Patch complete' }).waitFor({ timeout: 300000 });
+  await nextPage(page, 'Copy the patched files with mmCM');
+
+  const zipFile = path.join(tmpRoot, 'cfw-brazil.zip');
+  await downloadAndSave(page, 'Download COALESCED files', zipFile);
+  const entries = await unzip(zipFile, path.join(tmpRoot, 'cfw-brazil'));
+  const coalesced = [...entries.keys()].filter(name => /^COALESCED_[A-Z]+\.BIN$/i.test(name));
+  assert.deepEqual(coalesced.sort(), ['COALESCED_ESM.BIN', 'COALESCED_INT.BIN', 'COALESCED_POR.BIN'], 'the Brazil update ships three COALESCED files');
+  for (const name of coalesced) assertPatchedCoalesced(entries.get(name), name);
+  assert.match(await page.locator('.ak-page').innerText(), /Copy the 3 COALESCED/);
+  await context.close();
+}
+
 async function testMobile(browser, baseUrl) {
   const context = await browser.newContext({
     ...devices['iPhone 13'],
@@ -566,6 +598,8 @@ async function main() {
     console.log('ok   Chromium direct install');
     await testCfw(browser, baseUrl);
     console.log('ok   CFW zip path');
+    await testCfwFewerCoalescedFiles(browser, baseUrl);
+    console.log('ok   CFW zip path for a region with fewer COALESCED files');
     await testRufusBranch(browser, baseUrl);
     console.log('ok   Windows/Rufus branch and drive warnings');
     await testLinuxBranch(browser, baseUrl);

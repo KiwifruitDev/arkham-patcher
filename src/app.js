@@ -1137,7 +1137,7 @@ const patchStep = {
     const page = h('div', { class: 'ak-page' },
       h('h2', {}, state.mode === 'cfw' ? 'Patch the COALESCED files' : 'Patch the backup'),
       h('p', {}, state.mode === 'cfw'
-        ? `The official ${entry?.titleId ?? ''} 1.06 update is downloaded from this page, decrypted locally, and the Arkham: Revived redirect is added to every COALESCED file. Nothing is uploaded.`
+        ? `The official ${entry?.titleId ?? ''} 1.06 update is downloaded from this page, decrypted locally, and every COALESCED file it contains gets the Arkham: Revived redirect and has its startup movie disabled. Nothing is uploaded.`
         : `The official ${entry?.titleId ?? ''} 1.06 update is downloaded from this page and merged into your backup. Only the end of the archive is rewritten. Nothing is uploaded.`),
     );
 
@@ -1246,7 +1246,7 @@ async function startPatch() {
     progress.setFraction(1);
 
     // 3. Patch COALESCED files
-    progress.setPhase('coalesced', 'Adding the Arkham: Revived redirect to PS3-BmNetVars.ini');
+    progress.setPhase('coalesced', 'Patching PS3-BmNetVars.ini and PS3-BmEngine.ini');
     const updated = [];
     const inCookedDir = path => isCoalescedName(path) && path.toUpperCase().includes('/COOKEDPS3/');
     const coalesced = state.patchFiles.filter(file => inCookedDir(file.path));
@@ -1258,7 +1258,7 @@ async function startPatch() {
         continue;
       }
       const patched = await patchCoalescedBlob(file.blob);
-      if (!patched.changed) throw new Error(`${basename(file.path)} does not contain BmGame/Config/PS3-BmNetVars.ini.`);
+      if (!patched.redirect) throw new Error(`${basename(file.path)} does not contain BmGame/Config/PS3-BmNetVars.ini.`);
       updated.push({ ...file, blob: patched.blob, size: patched.blob.size });
       progress.setFraction((coalesced.findIndex(item => item.path === file.path) + 1) / coalesced.length);
       progress.setDetail(basename(file.path));
@@ -1601,7 +1601,7 @@ const cfwIntro = {
   render() {
     return h('div', { class: 'ak-page' },
       h('h2', {}, 'CFW or HEN: no backup needed'),
-      h('p', {}, 'This page will download the official 1.06 update, decrypt it in memory, and patch every COALESCED file with the Arkham: Revived redirect. You get a zip to copy onto the PS3 with multiMAN (mmCM).'),
+      h('p', {}, 'This page will download the official 1.06 update, decrypt it in memory, and patch every COALESCED file with the Arkham: Revived redirect and the startup movie disabled. You get a zip to copy onto the PS3 with multiMAN (mmCM).'),
       h('div', { class: 'ak-callout' },
         h('strong', {}, 'Before you start'),
         h('ul', { class: 'ak-list' },

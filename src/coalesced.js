@@ -4,14 +4,22 @@
 //
 // The parser keeps the stored keys and values verbatim, so unpacking and
 // repacking an untouched file reproduces its bytes. Only the section that
-// points GDHttp at Arkham: Revived is added.
+// points GDHttp at Arkham: Revived is added, and the startup movie switch in
+// PS3-BmEngine.ini is flipped.
 
-const SECTION_NAME = 'Default__GDHttp GDHttp';
-const TARGET_INI = 'bmgame/config/ps3-bmnetvars.ini';
-const SETTINGS = [
+const HTTP_SECTION = 'Default__GDHttp GDHttp';
+const HTTP_INI = 'bmgame/config/ps3-bmnetvars.ini';
+const HTTP_SETTINGS = [
   ['TitleFileName', 'dummy.json'],
-  ['Settings', '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")'],
+  ['Settings', '(BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")'],
 ];
+
+// Arkham: Revived replaces the startup movie, so the engine must not wait for
+// it. COALESCED files without PS3-BmEngine.ini are left alone, and the section
+// is only added inside an INI file that already exists.
+const MOVIE_SECTION = 'FullScreenMovie';
+const MOVIE_INI = 'bmgame/config/ps3-bmengine.ini';
+const MOVIE_SETTINGS = [['bForceNoMovies', 'TRUE']];
 
 function normalizeInternalName(name) {
   const segments = name.replace(/\\/g, '/').split('/');
@@ -152,38 +160,112 @@ export function writeCoalesced(coalesced) {
   return writer.bytesValue();
 }
 
+function findIni(coalesced, normalizedName) {
+  return coalesced.files.find(file => normalizeInternalName(file.name) === normalizedName) ?? null;
+}
+
+/** GConfig sections are plain `[Name]` blocks; create the one that is missing. */
+function ensureSection(file, name, { prepend = false } = {}) {
+  const lowered = name.toLowerCase();
+  const existing = file.sections.find(item => item.name.toLowerCase() === lowered);
+  if (existing) return { section: existing, created: false };
+  const section = { name, values: [] };
+  if (prepend) file.sections.unshift(section);
+  else file.sections.push(section);
+  return { section, created: true };
+}
+
+function assignValues(section, settings) {
+  let changed = false;
+  for (const [key, value] of settings) {
+    const lowered = key.toLowerCase();
+    const existing = section.values.find(item => item.key.toLowerCase() === lowered);
+    if (!existing) {
+      section.values.push({ key, value });
+      changed = true;
+    } else if (existing.value !== value) {
+      existing.value = value;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/**
+ * Applies one INI edit to the matching file in a coalesced container. A
+ * COALESCED_*.BIN without the file (regions ship different language sets) is
+ * reported as `found: false` instead of failing the whole patch.
+ *
+ * @returns {{found: boolean, changed: boolean, patched: string[]}}
+ */
+function applyIniPatch(coalesced, { ini, section, settings, prepend = false }) {
+  const file = findIni(coalesced, ini);
+  if (!file) return { found: false, changed: false, patched: [] };
+  const target = ensureSection(file, section, { prepend });
+  const changed = assignValues(target.section, settings) || target.created;
+  return { found: true, changed, patched: [file.name] };
+}
+
 /**
  * Adds (or updates) the GDHttp redirect section at the top of every
  * PS3-BmNetVars.ini in a coalesced file.
  *
- * @returns {{changed: boolean, patched: string[]}}
+ * @returns {{found: boolean, changed: boolean, patched: string[]}}
  */
 export function applyHttpRedirect(coalesced) {
-  const patched = [];
-  for (const file of coalesced.files) {
-    if (normalizeInternalName(file.name) !== TARGET_INI) continue;
-    let section = file.sections.find(item => item.name.toLowerCase() === SECTION_NAME.toLowerCase());
-    if (!section) {
-      section = { name: SECTION_NAME, values: [] };
-      file.sections.unshift(section);
-    }
-    for (const [key, value] of SETTINGS) {
-      const existing = section.values.find(item => item.key === key);
-      if (existing) existing.value = value;
-      else section.values.push({ key, value });
-    }
-    patched.push(file.name);
-  }
-  return { changed: patched.length > 0, patched };
+  return applyIniPatch(coalesced, {
+    ini: HTTP_INI,
+    section: HTTP_SECTION,
+    settings: HTTP_SETTINGS,
+    prepend: true,
+  });
+}
+
+/**
+ * Sets `bForceNoMovies` in the `[FullScreenMovie]` section of every
+ * PS3-BmEngine.ini in a coalesced file.
+ *
+ * @returns {{found: boolean, changed: boolean, patched: string[]}}
+ */
+export function applyNoMovies(coalesced) {
+  return applyIniPatch(coalesced, {
+    ini: MOVIE_INI,
+    section: MOVIE_SECTION,
+    settings: MOVIE_SETTINGS,
+  });
+}
+
+/**
+ * Applies every Arkham: Revived INI edit to a parsed coalesced file.
+ *
+ * @returns {{changed: boolean, patched: string[], redirect: boolean, movies: boolean}}
+ */
+export function applyPatches(coalesced) {
+  const redirect = applyHttpRedirect(coalesced);
+  const movies = applyNoMovies(coalesced);
+  return {
+    changed: redirect.changed || movies.changed,
+    patched: [...new Set([...redirect.patched, ...movies.patched])],
+    redirect: redirect.found,
+    movies: movies.found,
+  };
 }
 
 /** Convenience wrapper used by the patcher for an in-memory COALESCED blob. */
 export async function patchCoalescedBlob(blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const parsed = parseCoalesced(bytes);
-  const result = applyHttpRedirect(parsed);
-  if (!result.changed) return { blob, changed: false, patched: [] };
-  return { blob: new Blob([writeCoalesced(parsed)]), changed: true, patched: result.patched };
+  const result = applyPatches(parsed);
+  if (!result.changed) {
+    return { blob, changed: false, patched: [], redirect: result.redirect, movies: result.movies };
+  }
+  return {
+    blob: new Blob([writeCoalesced(parsed)]),
+    changed: true,
+    patched: result.patched,
+    redirect: result.redirect,
+    movies: result.movies,
+  };
 }
 
 export function isCoalescedName(path) {
