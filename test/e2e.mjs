@@ -198,7 +198,7 @@ function assertPatchedCoalesced(buffer, label) {
   const section = target.sections.find(item => item.name === 'Default__GDHttp GDHttp');
   assert.ok(section, `${label} has the GDHttp section`);
   assert.equal(section.values.find(item => item.key === 'TitleFileName')?.value, 'dummy.json');
-  assert.equal(section.values.find(item => item.key === 'Settings')?.value, '(BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")');
+  assert.equal(section.values.find(item => item.key === 'Settings')?.value, '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")');
 
   const engine = parsed.files.find(file => /PS3-BmEngine\.ini$/i.test(file.name));
   assert.ok(engine, `${label} contains PS3-BmEngine.ini`);

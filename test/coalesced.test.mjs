@@ -31,7 +31,7 @@ test('adds the GDHttp redirect section to PS3-BmNetVars.ini', { skip: !fs.exists
   assert.equal(patched.sections[0].name, 'Default__GDHttp GDHttp');
   assert.deepEqual(patched.sections[0].values, [
     { key: 'TitleFileName', value: 'dummy.json' },
-    { key: 'Settings', value: '(BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")' },
+    { key: 'Settings', value: '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")' },
   ]);
 });
 

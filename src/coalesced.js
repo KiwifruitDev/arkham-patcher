@@ -11,7 +11,7 @@ const HTTP_SECTION = 'Default__GDHttp GDHttp';
 const HTTP_INI = 'bmgame/config/ps3-bmnetvars.ini';
 const HTTP_SETTINGS = [
   ['TitleFileName', 'dummy.json'],
-  ['Settings', '(BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")'],
+  ['Settings', '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")'],
 ];
 
 // Arkham: Revived replaces the startup movie, so the engine must not wait for

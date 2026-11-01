@@ -55,7 +55,7 @@ files each package actually contains.
    ```ini
    [Default__GDHttp GDHttp]
    TitleFileName = dummy.json
-   Settings      = (BaseURL="http://arkhamrevived.kiwifruitdev.com/",EchoBaseURL="http://arkhamrevived.kiwifruitdev.com/Echo",WBIDTicketURL="http://arkhamrevived.kiwifruitdev.com/TokenService",WBIDAMSURL="http://arkhamrevived.kiwifruitdev.com/CLS")
+   Settings      = (BaseURL="http://arkhamrevived.kiwifruitdev.com/")
    ```
 
    and `BmGame/Config/PS3-BmEngine.ini` stops waiting for the startup movie:
