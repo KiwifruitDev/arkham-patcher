@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { applyHttpRedirect, applyNoMovies, applyPatches, parseCoalesced, writeCoalesced } from '../src/coalesced.js';
+import { applyFireteamMessage, applyHttpRedirect, applyNoMovies, applyPatches, parseCoalesced, writeCoalesced } from '../src/coalesced.js';
 
 const fixture = fileURLToPath(new URL('../../kiwifruitdev.com/public/arkhamrevived/ps3/COALESCED_INT.BIN', import.meta.url));
 
@@ -33,6 +33,34 @@ test('adds the GDHttp redirect section to PS3-BmNetVars.ini', { skip: !fs.exists
     { key: 'TitleFileName', value: 'dummy.json' },
     { key: 'Settings', value: '(BaseURL="http://arkhamrevived.kiwifruitdev.com/")' },
   ]);
+});
+
+test('updates CouldNotConnectFireteam in every localized GFxUI.int', () => {
+  const parsed = {
+    files: [
+      {
+        name: 'BmGame/Localization/INT/GFxUI.int',
+        sections: [{ name: 'Network', values: [{ key: 'CouldNotConnectFireteam', value: 'Old text' }, { key: 'KeepMe', value: '1' }] }],
+      },
+      {
+        name: 'BmGame/Localization/FRA/GFxUI.int',
+        sections: [{ name: 'Network', values: [{ key: 'OtherEntry', value: '2' }] }],
+      },
+    ],
+  };
+
+  const result = applyFireteamMessage(parsed);
+  assert.equal(result.found, true);
+  assert.equal(result.changed, true);
+  assert.equal(result.patched.length, 2);
+
+  const expected = String.raw`There was an error connecting to Arkham: Revived Redux.\nIf you're using CFW or HEN, did you disable syscalls?\nCheck out https://kiwifruitdev.com/arkhamrevived/\nJoin the Discord at https://discord.gg/7BneAcgvZh\nError`;
+  for (const file of parsed.files) {
+    const network = file.sections.find(section => section.name === 'Network');
+    assert.equal(network.values.find(item => item.key === 'CouldNotConnectFireteam').value, expected);
+  }
+  assert.equal(parsed.files[0].sections[0].values.find(item => item.key === 'KeepMe').value, '1');
+  assert.equal(applyFireteamMessage(parsed).changed, false);
 });
 
 test('sets bForceNoMovies in PS3-BmEngine.ini', { skip: !fs.existsSync(fixture) }, () => {

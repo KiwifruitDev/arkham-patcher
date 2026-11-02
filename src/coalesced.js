@@ -21,6 +21,10 @@ const MOVIE_SECTION = 'FullScreenMovie';
 const MOVIE_INI = 'bmgame/config/ps3-bmengine.ini';
 const MOVIE_SETTINGS = [['bForceNoMovies', 'TRUE']];
 
+const FIRETEAM_SECTION = 'Network';
+const FIRETEAM_KEY = 'CouldNotConnectFireteam';
+const FIRETEAM_VALUE = String.raw`There was an error connecting to Arkham: Revived Redux.\nIf you're using CFW or HEN, did you disable syscalls?\nCheck out https://kiwifruitdev.com/arkhamrevived/\nJoin the Discord at https://discord.gg/7BneAcgvZh\nError`;
+
 function normalizeInternalName(name) {
   const segments = name.replace(/\\/g, '/').split('/');
   const stack = [];
@@ -236,18 +240,40 @@ export function applyNoMovies(coalesced) {
 }
 
 /**
+ * Updates Arkham's network error message in every localized GFxUI INI.
+ */
+export function applyFireteamMessage(coalesced) {
+  const files = coalesced.files.filter(file => {
+    const name = normalizeInternalName(file.name);
+    return /\/gfxui\.[^.\/]+$/.test(name) && name.includes('bmgame/localization/');
+  });
+  let changed = false;
+  for (const file of files) {
+    const target = ensureSection(file, FIRETEAM_SECTION);
+    changed = assignValues(target.section, [[FIRETEAM_KEY, FIRETEAM_VALUE]]) || changed;
+  }
+  return {
+    found: files.length > 0,
+    changed,
+    patched: files.map(file => file.name),
+  };
+}
+
+/**
  * Applies every Arkham: Revived INI edit to a parsed coalesced file.
  *
- * @returns {{changed: boolean, patched: string[], redirect: boolean, movies: boolean}}
+ * @returns {{changed: boolean, patched: string[], redirect: boolean, movies: boolean, fireteam: boolean}}
  */
 export function applyPatches(coalesced) {
   const redirect = applyHttpRedirect(coalesced);
   const movies = applyNoMovies(coalesced);
+  const fireteam = applyFireteamMessage(coalesced);
   return {
-    changed: redirect.changed || movies.changed,
-    patched: [...new Set([...redirect.patched, ...movies.patched])],
+    changed: redirect.changed || movies.changed || fireteam.changed,
+    patched: [...new Set([...redirect.patched, ...movies.patched, ...fireteam.patched])],
     redirect: redirect.found,
     movies: movies.found,
+    fireteam: fireteam.found,
   };
 }
 
@@ -257,7 +283,7 @@ export async function patchCoalescedBlob(blob) {
   const parsed = parseCoalesced(bytes);
   const result = applyPatches(parsed);
   if (!result.changed) {
-    return { blob, changed: false, patched: [], redirect: result.redirect, movies: result.movies };
+    return { blob, changed: false, patched: [], redirect: result.redirect, movies: result.movies, fireteam: result.fireteam };
   }
   return {
     blob: new Blob([writeCoalesced(parsed)]),
@@ -265,6 +291,7 @@ export async function patchCoalescedBlob(blob) {
     patched: result.patched,
     redirect: result.redirect,
     movies: result.movies,
+    fireteam: result.fireteam,
   };
 }
 

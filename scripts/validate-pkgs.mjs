@@ -27,11 +27,11 @@ for (const region of REGIONS) {
   const missing = [];
   for (const item of coalesced) {
     const result = await patchCoalescedBlob(item.blob);
-    if (result.redirect && result.movies) {
+    if (result.redirect && result.movies && result.fireteam) {
       patched++;
       continue;
     }
-    missing.push(`${item.path.split('/').pop()}: ${[!result.redirect && 'PS3-BmNetVars.ini', !result.movies && 'PS3-BmEngine.ini'].filter(Boolean).join(', ')}`);
+    missing.push(`${item.path.split('/').pop()}: ${[!result.redirect && 'PS3-BmNetVars.ini', !result.movies && 'PS3-BmEngine.ini', !result.fireteam && 'GFxUI.int'].filter(Boolean).join(', ')}`);
   }
   const ok = pkg.titleId === region.titleId && coalesced.length > 0 && patched === coalesced.length;
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${region.titleId} (${region.file}): ${pkg.appVer} ${JSON.stringify(pkg.title)} · ${pkg.files.length} files · ${(bytes / 1048576).toFixed(1)} MiB · ${coalesced.length} coalesced, ${patched} patched${missing.length ? ` (missing ${missing.join('; ')})` : ''}`);
