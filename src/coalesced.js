@@ -23,7 +23,7 @@ const MOVIE_SETTINGS = [['bForceNoMovies', 'TRUE']];
 
 const FIRETEAM_SECTION = 'Network';
 const FIRETEAM_KEY = 'CouldNotConnectFireteam';
-const FIRETEAM_VALUE = String.raw`There was an error connecting to Arkham: Revived Redux.\nIf you're using CFW or HEN, did you disable syscalls?\nCheck out https://kiwifruitdev.com/arkhamrevived/\nJoin the Discord at https://discord.gg/7BneAcgvZh\nError`;
+const FIRETEAM_VALUE = String.raw`There was an error connecting to Arkham: Revived Redux. If you're using CFW or HEN, did you disable syscalls? Check out https://kiwifruitdev.com/arkhamrevived/ Join the Discord at https://discord.gg/7BneAcgvZh Error`;
 
 function normalizeInternalName(name) {
   const segments = name.replace(/\\/g, '/').split('/');

@@ -6,7 +6,7 @@ import { extractPkg } from '../src/pkg.js';
 import { parseCoalesced, patchCoalescedBlob } from '../src/coalesced.js';
 import { REGIONS } from '../src/config.js';
 
-const expected = String.raw`There was an error connecting to Arkham: Revived Redux.\nIf you're using CFW or HEN, did you disable syscalls?\nCheck out https://kiwifruitdev.com/arkhamrevived/\nJoin the Discord at https://discord.gg/7BneAcgvZh\nError`;
+const expected = String.raw`There was an error connecting to Arkham: Revived Redux. If you're using CFW or HEN, did you disable syscalls? Check out https://kiwifruitdev.com/arkhamrevived/ Join the Discord at https://discord.gg/7BneAcgvZh Error`;
 const root = fileURLToPath(new URL('../../kiwifruitdev.com/public/arkhamrevived/ps3/', import.meta.url));
 let failed = false;
 
